@@ -5,6 +5,7 @@ import json
 import torch
 import yaml
 import requests
+import time
 from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
 from torch_geometric.utils import index_sort
 from itertools import chain
@@ -38,8 +39,26 @@ wn18rr_id2entity = {}
 
 def fetch_wikidata(params):
     url = 'https://www.wikidata.org/w/api.php'
+    
+    # 使用SSH隧道代理
+    proxies = {
+        'http': 'http://127.0.0.1:7890',
+        'https': 'http://127.0.0.1:7890'
+    }
+    
+    # 请求头设置
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
     try:
-        return requests.get(url, params=params)
+        return requests.get(url, params=params, proxies=proxies, headers=headers, timeout=30)
+    except requests.exceptions.ProxyError as e:
+        print(f"代理错误: {e}")
+        return None
+    except requests.exceptions.Timeout as e:
+        print(f"请求超时: {e}")
+        return None
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -92,21 +111,34 @@ def get_properties(property_ids):
     else:
         return {property_id: "Failed to retrieve data" for property_id in property_ids}
 
-def fetch_in_parallel(ids_list, fetch_func):
-    batch_size = 50  # Adjust based on API limits
+def fetch_in_parallel(ids_list, fetch_func, max_workers=3, batch_size=50):
+    """
+    针对SSH隧道代理优化的高并发处理
+    - max_workers: 最大并发数，设置为3个平衡性能和稳定性
+    - batch_size: 批次大小，设置为50个ID（API限制）
+    """
+    # 确保批次大小不超过API限制
+    batch_size = min(batch_size, 50)
     batches = [ids_list[i:i + batch_size] for i in range(0, len(ids_list), batch_size)]
     results = {}
     
-    with ThreadPoolExecutor() as executor:
+    print(f"处理 {len(ids_list)} 个ID，分为 {len(batches)} 个批次，每批次最多 {batch_size} 个ID")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(fetch_func, batch): batch for batch in batches}
-        for future in futures:
+        
+        for i, future in enumerate(futures):
             batch = futures[future]
-            # if there is an invalid query in a batch, then keep the result for that query as query itself
             try:
-                batch_results = future.result()
+                print(f"处理批次 {i+1}/{len(batches)}: {len(batch)} 个ID")
+                batch_results = future.result(timeout=60)  # 1分钟超时
                 results.update(batch_results)
-            
+                
+                # 批次间短暂延迟，避免SSH隧道过载
+                time.sleep(0.2)
+                
             except Exception as e:
+                print(f"批次 {batch} 处理失败: {e}")
                 for qid in batch:
                     results[qid] = qid
     

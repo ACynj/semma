@@ -531,7 +531,17 @@ def order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings
 
     embeddings = []
     for i in range(2*len(graph.edge2id)):
-        embeddings.append(ordered_embeddings[i])
+        if i in ordered_embeddings:
+            embeddings.append(ordered_embeddings[i])
+        else:
+            # 如果索引不存在，使用零向量或默认值
+            # 这里使用与embeddings[0]相同维度的零向量
+            if len(embeddings) > 0:
+                embeddings.append(torch.zeros_like(embeddings[0]))
+            else:
+                # 如果这是第一个元素且缺失，创建一个默认的零向量
+                # 假设embedding维度为64（根据代码中的truncate_dim=64）
+                embeddings.append(torch.zeros(64))
 
     return embeddings
 
