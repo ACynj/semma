@@ -1,0 +1,46 @@
+06:37:50   Random seed: 1024
+06:37:50   Config file: config/transductive/pretrain_3g.yaml
+06:37:50   {'dataset': {'class': 'JointDataset',
+             'graphs': ['FB15k237', 'WN18RR', 'CoDExMedium'],
+             'root': './kg-datasets/'},
+ 'model': {'class': 'Ultra',
+           'entity_model': {'aggregate_func': 'sum',
+                            'class': 'EntityNBFNet',
+                            'hidden_dims': [64, 64, 64, 64, 64, 64],
+                            'input_dim': 64,
+                            'layer_norm': True,
+                            'message_func': 'distmult',
+                            'short_cut': True},
+           'relation_model': {'aggregate_func': 'sum',
+                              'class': 'RelNBFNet',
+                              'hidden_dims': [64, 64, 64, 64, 64, 64],
+                              'input_dim': 64,
+                              'layer_norm': True,
+                              'message_func': 'distmult',
+                              'short_cut': True},
+           'semantic_model': {'aggregate_func': 'sum',
+                              'class': 'SemRelNBFNet',
+                              'hidden_dims': [64, 64, 64, 64, 64, 64],
+                              'input_dim': 64,
+                              'layer_norm': True,
+                              'message_func': 'distmult',
+                              'short_cut': True}},
+ 'optimizer': {'class': 'AdamW', 'lr': 0.0005},
+ 'output_dir': './output',
+ 'task': {'adversarial_temperature': 1,
+          'metric': ['mr', 'mrr', 'hits@1', 'hits@3', 'hits@10'],
+          'name': 'MultiGraphPretraining',
+          'num_negative': 512,
+          'strict_negative': True},
+ 'train': {'batch_per_epoch': 80000,
+           'batch_size': 64,
+           'fast_test': 500,
+           'gpus': [0],
+           'log_interval': 800,
+           'num_epoch': 10}}
+06:43:43   '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /jinaai/jina-embeddings-v3/resolve/main/config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa04d72ffd0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: ae0d34c7-c5fb-4646-8f5a-0c6ceb814303)')' thrown while requesting HEAD https://huggingface.co/jinaai/jina-embeddings-v3/resolve/main/config.json
+06:43:43   Retrying in 1s [Retry 1/5].
+06:43:54   '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /jinaai/jina-embeddings-v3/resolve/main/config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa04d53e160>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: 43d32584-eb1f-4160-b51e-868429f51f85)')' thrown while requesting HEAD https://huggingface.co/jinaai/jina-embeddings-v3/resolve/main/config.json
+06:43:54   Retrying in 2s [Retry 2/5].
+06:44:06   '(MaxRetryError("HTTPSConnectionPool(host='huggingface.co', port=443): Max retries exceeded with url: /jinaai/jina-embeddings-v3/resolve/main/config.json (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fa04d53e4c0>, 'Connection to huggingface.co timed out. (connect timeout=10)'))"), '(Request ID: e789508c-2992-46f4-a72b-b745f91a7f48)')' thrown while requesting HEAD https://huggingface.co/jinaai/jina-embeddings-v3/resolve/main/config.json
+06:44:06   Retrying in 4s [Retry 3/5].
