@@ -1,1 +1,14 @@
-/models/,/output/,*.tsv,*.whl,/cache/
+# 模型文件目录
+/models/
+
+# 输出文件目录
+/output/
+
+# 数据文件
+*.tsv
+
+# Python包文件
+*.whl
+
+# 缓存目录
+/cache/
