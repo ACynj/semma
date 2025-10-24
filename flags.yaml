@@ -5,6 +5,7 @@ k: 0 # should be positive if you want to add specific num of 5th type edges to e
 model_embed: jinaai # [sentbert, jinaai]
 topx: 0 # top x% of all relation pairs
 threshold: 0.8 # threshold for constructing rg2
+dynamic_threshold: True # [True, False], if True, use adaptive threshold based on similarity distribution
 embedding_combiner: mlp # [mlp, concat, attention]
 eval_on_valid: False # [True, False]
 use_cos_sim_weights: True # [True, False], if True, we use cosine similarity weights for the 5th type edges

@@ -622,8 +622,96 @@ class RelLinkPredDataset(InMemoryDataset):
         ]
 
     def download(self) -> None:
+        import time
+        import ssl
+        import urllib.request
+        from urllib.error import URLError
+        
         for file_name in self.raw_file_names:
-            download_url(f'{self.urls[self.name]}/{file_name}', self.raw_dir)
+            url = f'{self.urls[self.name]}/{file_name}'
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f"Downloading {file_name} (attempt {attempt + 1}/{max_retries})...")
+                    download_url(url, self.raw_dir)
+                    print(f"Successfully downloaded {file_name}")
+                    break
+                except URLError as e:
+                    print(f"Download attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        print(f"Failed to download {file_name} after {max_retries} attempts")
+                        # Try alternative download method
+                        try:
+                            print(f"Trying alternative download method for {file_name}...")
+                            self._download_with_requests(url, file_name)
+                        except Exception as e2:
+                            print(f"Alternative download also failed: {e2}")
+                            raise e
+                except Exception as e:
+                    print(f"Unexpected error downloading {file_name}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise e
+
+    def _download_with_requests(self, url: str, file_name: str) -> None:
+        """Alternative download method using requests library"""
+        try:
+            import requests
+            import os
+            
+            print(f"Downloading {file_name} using requests...")
+            response = requests.get(url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            file_path = os.path.join(self.raw_dir, file_name)
+            os.makedirs(self.raw_dir, exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            print(f"Successfully downloaded {file_name} using requests")
+            
+        except ImportError:
+            print("requests library not available, trying urllib with custom SSL context...")
+            self._download_with_urllib_ssl(url, file_name)
+        except Exception as e:
+            print(f"requests download failed: {e}")
+            self._download_with_urllib_ssl(url, file_name)
+    
+    def _download_with_urllib_ssl(self, url: str, file_name: str) -> None:
+        """Download using urllib with custom SSL context"""
+        import urllib.request
+        import ssl
+        import os
+        
+        print(f"Downloading {file_name} using urllib with custom SSL...")
+        
+        # Create SSL context that's more permissive
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Create opener with custom SSL context
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+        
+        file_path = os.path.join(self.raw_dir, file_name)
+        os.makedirs(self.raw_dir, exist_ok=True)
+        
+        with opener.open(url, timeout=30) as response:
+            with open(file_path, 'wb') as f:
+                f.write(response.read())
+        
+        print(f"Successfully downloaded {file_name} using urllib with custom SSL")
 
     def process(self) -> None:
         with open(osp.join(self.raw_dir, 'entities.dict')) as f:
@@ -723,8 +811,96 @@ class WordNet18RR(InMemoryDataset):
         return 'data.pt'
 
     def download(self) -> None:
+        import time
+        import ssl
+        import urllib.request
+        from urllib.error import URLError
+        
         for filename in self.raw_file_names:
-            download_url(f'{self.url}/{filename}', self.raw_dir)
+            url = f'{self.url}/{filename}'
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f"Downloading {filename} (attempt {attempt + 1}/{max_retries})...")
+                    download_url(url, self.raw_dir)
+                    print(f"Successfully downloaded {filename}")
+                    break
+                except URLError as e:
+                    print(f"Download attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        print(f"Failed to download {filename} after {max_retries} attempts")
+                        # Try alternative download method
+                        try:
+                            print(f"Trying alternative download method for {filename}...")
+                            self._download_with_requests(url, filename)
+                        except Exception as e2:
+                            print(f"Alternative download also failed: {e2}")
+                            raise e
+                except Exception as e:
+                    print(f"Unexpected error downloading {filename}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise e
+
+    def _download_with_requests(self, url: str, filename: str) -> None:
+        """Alternative download method using requests library"""
+        try:
+            import requests
+            import os
+            
+            print(f"Downloading {filename} using requests...")
+            response = requests.get(url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            file_path = os.path.join(self.raw_dir, filename)
+            os.makedirs(self.raw_dir, exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            print(f"Successfully downloaded {filename} using requests")
+            
+        except ImportError:
+            print("requests library not available, trying urllib with custom SSL context...")
+            self._download_with_urllib_ssl(url, filename)
+        except Exception as e:
+            print(f"requests download failed: {e}")
+            self._download_with_urllib_ssl(url, filename)
+    
+    def _download_with_urllib_ssl(self, url: str, filename: str) -> None:
+        """Download using urllib with custom SSL context"""
+        import urllib.request
+        import ssl
+        import os
+        
+        print(f"Downloading {filename} using urllib with custom SSL...")
+        
+        # Create SSL context that's more permissive
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Create opener with custom SSL context
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+        
+        file_path = os.path.join(self.raw_dir, filename)
+        os.makedirs(self.raw_dir, exist_ok=True)
+        
+        with opener.open(url, timeout=30) as response:
+            with open(file_path, 'wb') as f:
+                f.write(response.read())
+        
+        print(f"Successfully downloaded {filename} using urllib with custom SSL")
 
     def process(self) -> None:
         node2id, idx = {}, 0
@@ -995,9 +1171,94 @@ class TransductiveDataset(InMemoryDataset):
         return ["train.txt", "valid.txt", "test.txt"]
     
     def download(self):
+        import time
+        import ssl
+        import urllib.request
+        from urllib.error import URLError
+        
         for url, path in zip(self.urls, self.raw_paths):
-            download_path = download_url(url, self.raw_dir)
-            os.rename(download_path, path)
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f"Downloading {os.path.basename(path)} (attempt {attempt + 1}/{max_retries})...")
+                    download_path = download_url(url, self.raw_dir)
+                    os.rename(download_path, path)
+                    print(f"Successfully downloaded {os.path.basename(path)}")
+                    break
+                except URLError as e:
+                    print(f"Download attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        print(f"Failed to download {os.path.basename(path)} after {max_retries} attempts")
+                        # Try alternative download method
+                        try:
+                            print(f"Trying alternative download method for {os.path.basename(path)}...")
+                            self._download_with_requests(url, path)
+                        except Exception as e2:
+                            print(f"Alternative download also failed: {e2}")
+                            raise e
+                except Exception as e:
+                    print(f"Unexpected error downloading {os.path.basename(path)}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise e
+
+    def _download_with_requests(self, url: str, file_path: str) -> None:
+        """Alternative download method using requests library"""
+        try:
+            import requests
+            import os
+            
+            print(f"Downloading {os.path.basename(file_path)} using requests...")
+            response = requests.get(url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            print(f"Successfully downloaded {os.path.basename(file_path)} using requests")
+            
+        except ImportError:
+            print("requests library not available, trying urllib with custom SSL context...")
+            self._download_with_urllib_ssl(url, file_path)
+        except Exception as e:
+            print(f"requests download failed: {e}")
+            self._download_with_urllib_ssl(url, file_path)
+    
+    def _download_with_urllib_ssl(self, url: str, file_path: str) -> None:
+        """Download using urllib with custom SSL context"""
+        import urllib.request
+        import ssl
+        import os
+        
+        print(f"Downloading {os.path.basename(file_path)} using urllib with custom SSL...")
+        
+        # Create SSL context that's more permissive
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Create opener with custom SSL context
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+        
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with opener.open(url, timeout=30) as response:
+            with open(file_path, 'wb') as f:
+                f.write(response.read())
+        
+        print(f"Successfully downloaded {os.path.basename(file_path)} using urllib with custom SSL")
     
     def load_file(self, triplet_file, inv_entity_vocab={}, inv_rel_vocab={}):
 
@@ -1202,18 +1463,99 @@ class CoDEx(TransductiveDataset):
     def download(self):
         # print("====================================")
         # print(self.urls)
+        import time
+        import ssl
+        import urllib.request
+        from urllib.error import URLError
 
         raw_paths_here = self.raw_paths
         raw_paths_here.append(os.path.join(self.raw_dir, "relations.json"))
         # print(raw_paths_here)
 
         for url, path in zip(self.urls, raw_paths_here):
-            if '%' in url:
-                download_path = download_url(url % self.name, self.raw_dir)
-            else:
-                download_path = download_url(url, self.raw_dir)
+            actual_url = url % self.name if '%' in url else url
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f"Downloading {os.path.basename(path)} (attempt {attempt + 1}/{max_retries})...")
+                    download_path = download_url(actual_url, self.raw_dir)
+                    os.rename(download_path, path)
+                    print(f"Successfully downloaded {os.path.basename(path)}")
+                    break
+                except URLError as e:
+                    print(f"Download attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        print(f"Failed to download {os.path.basename(path)} after {max_retries} attempts")
+                        # Try alternative download method
+                        try:
+                            print(f"Trying alternative download method for {os.path.basename(path)}...")
+                            self._download_with_requests(actual_url, path)
+                        except Exception as e2:
+                            print(f"Alternative download also failed: {e2}")
+                            raise e
+                except Exception as e:
+                    print(f"Unexpected error downloading {os.path.basename(path)}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise e
 
-            os.rename(download_path, path)
+    def _download_with_requests(self, url: str, file_path: str) -> None:
+        """Alternative download method using requests library"""
+        try:
+            import requests
+            import os
+            
+            print(f"Downloading {os.path.basename(file_path)} using requests...")
+            response = requests.get(url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            print(f"Successfully downloaded {os.path.basename(file_path)} using requests")
+            
+        except ImportError:
+            print("requests library not available, trying urllib with custom SSL context...")
+            self._download_with_urllib_ssl(url, file_path)
+        except Exception as e:
+            print(f"requests download failed: {e}")
+            self._download_with_urllib_ssl(url, file_path)
+    
+    def _download_with_urllib_ssl(self, url: str, file_path: str) -> None:
+        """Download using urllib with custom SSL context"""
+        import urllib.request
+        import ssl
+        import os
+        
+        print(f"Downloading {os.path.basename(file_path)} using urllib with custom SSL...")
+        
+        # Create SSL context that's more permissive
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Create opener with custom SSL context
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+        
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with opener.open(url, timeout=30) as response:
+            with open(file_path, 'wb') as f:
+                f.write(response.read())
+        
+        print(f"Successfully downloaded {os.path.basename(file_path)} using urllib with custom SSL")
 
     # default loading procedure: process train/valid/test files, create graphs from them
 
@@ -1646,11 +1988,110 @@ class AristoV4(TransductiveDataset):
     delimiter = "\t"
 
     def download(self):
-        download_path = download_url(self.url, self.raw_dir)
+        import time
+        import ssl
+        import urllib.request
+        from urllib.error import URLError
+        
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"Downloading {self.name} (attempt {attempt + 1}/{max_retries})...")
+                download_path = download_url(self.url, self.raw_dir)
+                extract_zip(download_path, self.raw_dir)
+                os.unlink(download_path)
+                for oldname, newname in zip(['train', 'valid', 'test'], self.raw_paths):
+                    os.rename(os.path.join(self.raw_dir, oldname), newname)
+                print(f"Successfully downloaded {self.name}")
+                break
+            except URLError as e:
+                print(f"Download attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    print(f"Failed to download {self.name} after {max_retries} attempts")
+                    # Try alternative download method
+                    try:
+                        print(f"Trying alternative download method for {self.name}...")
+                        self._download_with_requests()
+                    except Exception as e2:
+                        print(f"Alternative download also failed: {e2}")
+                        raise e
+            except Exception as e:
+                print(f"Unexpected error downloading {self.name}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    raise e
+
+    def _download_with_requests(self) -> None:
+        """Alternative download method using requests library"""
+        try:
+            import requests
+            import os
+            import zipfile
+            
+            print(f"Downloading {self.name} using requests...")
+            response = requests.get(self.url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            download_path = os.path.join(self.raw_dir, f"{self.name}.zip")
+            os.makedirs(self.raw_dir, exist_ok=True)
+            
+            with open(download_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            extract_zip(download_path, self.raw_dir)
+            os.unlink(download_path)
+            for oldname, newname in zip(['train', 'valid', 'test'], self.raw_paths):
+                os.rename(os.path.join(self.raw_dir, oldname), newname)
+            
+            print(f"Successfully downloaded {self.name} using requests")
+            
+        except ImportError:
+            print("requests library not available, trying urllib with custom SSL context...")
+            self._download_with_urllib_ssl()
+        except Exception as e:
+            print(f"requests download failed: {e}")
+            self._download_with_urllib_ssl()
+    
+    def _download_with_urllib_ssl(self) -> None:
+        """Download using urllib with custom SSL context"""
+        import urllib.request
+        import ssl
+        import os
+        import zipfile
+        
+        print(f"Downloading {self.name} using urllib with custom SSL...")
+        
+        # Create SSL context that's more permissive
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Create opener with custom SSL context
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+        
+        download_path = os.path.join(self.raw_dir, f"{self.name}.zip")
+        os.makedirs(self.raw_dir, exist_ok=True)
+        
+        with opener.open(self.url, timeout=30) as response:
+            with open(download_path, 'wb') as f:
+                f.write(response.read())
+        
         extract_zip(download_path, self.raw_dir)
         os.unlink(download_path)
         for oldname, newname in zip(['train', 'valid', 'test'], self.raw_paths):
             os.rename(os.path.join(self.raw_dir, oldname), newname)
+        
+        print(f"Successfully downloaded {self.name} using urllib with custom SSL")
 
 class SparserKG(TransductiveDataset):
 

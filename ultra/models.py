@@ -374,11 +374,13 @@ class SemRelNBFNet(BaseNBFNet):
         # initial (boundary) condition - initialize all node states as zeros
         boundary = torch.zeros(batch_size, data.num_nodes, self.dims[0], device=h_index.device)
         
-        # Create a mask for valid indices
-        valid_indices = torch.arange(data.num_nodes, device=reduced_embedding.device)
+        # Handle the case where reduced_embedding has fewer elements than num_nodes
+        num_relations = reduced_embedding.shape[0]
+        valid_indices = torch.arange(min(num_relations, data.num_nodes), device=reduced_embedding.device)
 
         # Populate the boundary tensor for all batches in parallel
-        boundary[:, valid_indices] = reduced_embedding.unsqueeze(0)
+        # Only assign embeddings for valid relation indices
+        boundary[:, valid_indices] = reduced_embedding[:len(valid_indices)].unsqueeze(0)
         # print("====================================")
         # print(valid_indices.shape)
         # print(valid_indices)

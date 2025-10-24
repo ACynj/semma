@@ -258,6 +258,67 @@ def find_top_x_percent(embeddings, relation_names):
  
     return top_x_pairs
 
+def calculate_dynamic_threshold(embeddings):
+    """
+    计算基于相似度分布的自适应阈值
+    使用多种统计方法确定最优阈值
+    """
+    # Compute the cosine similarity matrix
+    similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
+    
+    # Mask the diagonal (self-similarity)
+    mask = torch.eye(similarity_matrix.size(0), device=similarity_matrix.device).bool()
+    similarity_matrix.masked_fill_(mask, float('-inf'))
+    
+    # Get upper triangular similarities (avoid duplicates)
+    num_relations = similarity_matrix.size(0)
+    indices = torch.triu_indices(num_relations, num_relations, offset=1)
+    similarities = similarity_matrix[indices[0], indices[1]]
+    
+    # Remove -inf values (diagonal elements)
+    valid_similarities = similarities[similarities != float('-inf')]
+    
+    if len(valid_similarities) == 0:
+        return flags.threshold  # fallback to original threshold
+    
+    # Method 1: Percentile-based threshold (75th percentile)
+    percentile_threshold = torch.quantile(valid_similarities, 0.75).item()
+    
+    # Method 2: Mean + Standard deviation
+    mean_sim = torch.mean(valid_similarities).item()
+    std_sim = torch.std(valid_similarities).item()
+    
+    # Handle case where all similarities are the same (std = 0)
+    if torch.isnan(torch.tensor(std_sim)) or std_sim == 0:
+        std_threshold = mean_sim  # Use mean when std is 0 or NaN
+    else:
+        std_threshold = mean_sim + 0.5 * std_sim
+    
+    # Method 3: Adaptive based on distribution shape
+    # Use the higher of the two methods, but cap at reasonable values
+    adaptive_threshold = max(percentile_threshold, std_threshold)
+    adaptive_threshold = min(adaptive_threshold, 0.95)  # Cap at 0.95
+    adaptive_threshold = max(adaptive_threshold, 0.3)  # Floor at 0.3
+    
+    # Special case: if all similarities are very low (e.g., all zeros), 
+    # use a more conservative threshold
+    if torch.max(valid_similarities).item() < 0.1:
+        print("  - Warning: All similarities are very low, using conservative threshold")
+        adaptive_threshold = min(0.1, adaptive_threshold)  # Use lower threshold for very low similarities
+    
+    print(f"Dynamic threshold calculation:")
+    print(f"  - Number of valid similarities: {len(valid_similarities)}")
+    print(f"  - Min similarity: {torch.min(valid_similarities).item():.4f}")
+    print(f"  - Max similarity: {torch.max(valid_similarities).item():.4f}")
+    print(f"  - Mean similarity: {mean_sim:.4f}")
+    print(f"  - Std similarity: {std_sim:.4f}")
+    print(f"  - 75th percentile: {percentile_threshold:.4f}")
+    print(f"  - Mean + 0.5*std: {std_threshold:.4f}")
+    print(f"  - Selected threshold: {adaptive_threshold:.4f}")
+    print(f"  - Original threshold: {flags.threshold:.4f}")
+    
+    return adaptive_threshold
+
 def find_pairs_above_threshold(embeddings, relation_names):
     # Compute the cosine similarity matrix
     similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
@@ -265,14 +326,20 @@ def find_pairs_above_threshold(embeddings, relation_names):
     mask = torch.eye(similarity_matrix.size(0), device=similarity_matrix.device).bool()
     similarity_matrix.masked_fill_(mask, float('-inf'))
     
+    # Use dynamic threshold if enabled
+    if hasattr(flags, 'dynamic_threshold') and flags.dynamic_threshold:
+        threshold = calculate_dynamic_threshold(embeddings)
+    else:
+        threshold = flags.threshold
+    
     num_relations = similarity_matrix.size(0)
-    row_indices, col_indices = torch.where(similarity_matrix > flags.threshold)
+    row_indices, col_indices = torch.where(similarity_matrix > threshold)
     
     # Convert to relation index pairs
     selected_pairs = [(row.item(), col.item()) for row, col in zip(row_indices, col_indices)]
     
     print("====================================")
-    print(f"Number of relation pairs with cosine similarity > {flags.threshold}: {len(selected_pairs)}")
+    print(f"Number of relation pairs with cosine similarity > {threshold:.4f}: {len(selected_pairs)}")
     # Uncomment if you want to print the actual relations
     # for row, col in zip(row_indices, col_indices):
     #     rel1, rel2 = row.item(), col.item()
