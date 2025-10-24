@@ -37,6 +37,41 @@ fb_id2relation = {}
 wn18rr_id2relation = {}
 wn18rr_id2entity = {}
 
+# 缓存相关工具函数
+def get_cache_path(cache_type, entity_id):
+    """获取缓存文件路径"""
+    cache_dir = os.path.join(mydir, "cache", cache_type)
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, f"{entity_id}.json")
+
+def load_from_cache(cache_type, entity_id):
+    """从缓存加载数据"""
+    cache_path = get_cache_path(cache_type, entity_id)
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                print(f"✓ 使用缓存: {cache_type}/{entity_id}.json")
+                return data
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"⚠ 缓存文件损坏，将重新获取: {cache_path}")
+            return None
+    return None
+
+def save_to_cache(cache_type, entity_id, label):
+    """保存数据到缓存"""
+    cache_path = get_cache_path(cache_type, entity_id)
+    cache_data = {
+        f"{cache_type}_id": entity_id,
+        "label": label,
+        "cached_at": time.strftime("%Y-%m-%d %H:%M:%S.%f")
+    }
+    try:
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, ensure_ascii=False, indent=2)
+    except IOError as e:
+        print(f"⚠ 保存缓存失败: {cache_path}, 错误: {e}")
+
 def fetch_wikidata(params):
     url = 'https://www.wikidata.org/w/api.php'
     
@@ -64,52 +99,86 @@ def fetch_wikidata(params):
         return None
 
 def get_entities(entity_ids):
-    params = {
-        'action': 'wbgetentities',
-        'ids': '|'.join(entity_ids),
-        'format': 'json',
-        'languages': 'en'
-    }
-    response = fetch_wikidata(params)
-    if response:
-        data = response.json()
-        entities_dict = {}
-        for entity_id in entity_ids:
-            if entity_id in data['entities']:
-                entity = data['entities'][entity_id]
-                if 'labels' in entity and 'en' in entity['labels']:
-                    entities_dict[entity_id] = entity['labels']['en']['value']
+    entities_dict = {}
+    uncached_ids = []
+    
+    # 首先检查缓存
+    for entity_id in entity_ids:
+        cached_data = load_from_cache("entities", entity_id)
+        if cached_data:
+            entities_dict[entity_id] = cached_data["label"]
+        else:
+            uncached_ids.append(entity_id)
+    
+    # 对于未缓存的ID，调用API
+    if uncached_ids:
+        print(f"📡 调用Wikidata API获取 {len(uncached_ids)} 个实体...")
+        params = {
+            'action': 'wbgetentities',
+            'ids': '|'.join(uncached_ids),
+            'format': 'json',
+            'languages': 'en'
+        }
+        response = fetch_wikidata(params)
+        if response:
+            data = response.json()
+            for entity_id in uncached_ids:
+                if entity_id in data['entities']:
+                    entity = data['entities'][entity_id]
+                    if 'labels' in entity and 'en' in entity['labels']:
+                        label = entity['labels']['en']['value']
+                        entities_dict[entity_id] = label
+                        save_to_cache("entities", entity_id, label)
+                    else:
+                        entities_dict[entity_id] = "No English label found"
                 else:
-                    entities_dict[entity_id] = "No English label found"
-            else:
-                entities_dict[entity_id] = "Entity not found"
-        return entities_dict
-    else:
-        return {entity_id: "Failed to retrieve data" for entity_id in entity_ids}
+                    entities_dict[entity_id] = "Entity not found"
+        else:
+            for entity_id in uncached_ids:
+                entities_dict[entity_id] = "Failed to retrieve data"
+    
+    return entities_dict
 
 def get_properties(property_ids):
-    params = {
-        'action': 'wbgetentities',
-        'ids': '|'.join(property_ids),
-        'format': 'json',
-        'languages': 'en'
-    }
-    response = fetch_wikidata(params)
-    if response:
-        data = response.json()
-        properties_dict = {}
-        for property_id in property_ids:
-            if property_id in data['entities']:
-                property_data = data['entities'][property_id]
-                if 'labels' in property_data and 'en' in property_data['labels']:
-                    properties_dict[property_id] = property_data['labels']['en']['value']
+    properties_dict = {}
+    uncached_ids = []
+    
+    # 首先检查缓存
+    for property_id in property_ids:
+        cached_data = load_from_cache("properties", property_id)
+        if cached_data:
+            properties_dict[property_id] = cached_data["label"]
+        else:
+            uncached_ids.append(property_id)
+    
+    # 对于未缓存的ID，调用API
+    if uncached_ids:
+        print(f"📡 调用Wikidata API获取 {len(uncached_ids)} 个属性...")
+        params = {
+            'action': 'wbgetentities',
+            'ids': '|'.join(uncached_ids),
+            'format': 'json',
+            'languages': 'en'
+        }
+        response = fetch_wikidata(params)
+        if response:
+            data = response.json()
+            for property_id in uncached_ids:
+                if property_id in data['entities']:
+                    property_data = data['entities'][property_id]
+                    if 'labels' in property_data and 'en' in property_data['labels']:
+                        label = property_data['labels']['en']['value']
+                        properties_dict[property_id] = label
+                        save_to_cache("properties", property_id, label)
+                    else:
+                        properties_dict[property_id] = "No English label found"
                 else:
-                    properties_dict[property_id] = "No English label found"
-            else:
-                properties_dict[property_id] = "Property not found"
-        return properties_dict
-    else:
-        return {property_id: "Failed to retrieve data" for property_id in property_ids}
+                    properties_dict[property_id] = "Property not found"
+        else:
+            for property_id in uncached_ids:
+                properties_dict[property_id] = "Failed to retrieve data"
+    
+    return properties_dict
 
 def fetch_in_parallel(ids_list, fetch_func, max_workers=3, batch_size=50):
     """
