@@ -258,11 +258,48 @@ def find_top_x_percent(embeddings, relation_names):
  
     return top_x_pairs
 
+def calculate_elbow_k(similarities, max_k=10):
+    """
+    使用肘部法则选择最优K值
+    """
+    from sklearn.cluster import KMeans
+    import numpy as np
+    
+    # 转换为numpy数组
+    similarities_np = similarities.cpu().numpy().reshape(-1, 1)
+    
+    # 计算不同K值的SSE (Sum of Squared Errors)
+    sse = []
+    k_range = range(2, min(max_k + 1, len(similarities_np) // 2))
+    
+    for k in k_range:
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        kmeans.fit(similarities_np)
+        sse.append(kmeans.inertia_)
+    
+    if len(sse) < 2:
+        return 2  # 默认返回2
+    
+    # 计算二阶导数来找到拐点
+    sse = np.array(sse)
+    second_derivative = np.diff(sse, 2)
+    
+    # 找到二阶导数最大的点（拐点）
+    if len(second_derivative) > 0:
+        elbow_k = k_range[np.argmax(second_derivative) + 2]  # +2 因为二阶导数比原数组短2
+    else:
+        elbow_k = 2
+    
+    return elbow_k
+
 def calculate_dynamic_threshold(embeddings):
     """
-    计算基于相似度分布的自适应阈值
-    使用多种统计方法确定最优阈值
+    计算基于K-means聚类的自适应阈值
+    使用K-means对相似度值进行聚类，计算所有簇中心的平均值作为阈值
     """
+    from sklearn.cluster import KMeans
+    import numpy as np
+    
     # Compute the cosine similarity matrix
     similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
     
@@ -281,39 +318,55 @@ def calculate_dynamic_threshold(embeddings):
     if len(valid_similarities) == 0:
         return flags.threshold  # fallback to original threshold
     
-    # Method 1: Percentile-based threshold (75th percentile)
-    percentile_threshold = torch.quantile(valid_similarities, 0.75).item()
+    # 转换为numpy数组进行聚类
+    similarities_np = valid_similarities.cpu().numpy().reshape(-1, 1)
     
-    # Method 2: Mean + Standard deviation
-    mean_sim = torch.mean(valid_similarities).item()
-    std_sim = torch.std(valid_similarities).item()
+    # 使用肘部法则选择最优K值
+    optimal_k = calculate_elbow_k(valid_similarities, max_k=min(10, len(similarities_np) // 2))
     
-    # Handle case where all similarities are the same (std = 0)
-    if torch.isnan(torch.tensor(std_sim)) or std_sim == 0:
-        std_threshold = mean_sim  # Use mean when std is 0 or NaN
+    # 执行K-means聚类
+    kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+    kmeans.fit(similarities_np)
+    
+    # 获取所有簇中心
+    cluster_centers = kmeans.cluster_centers_.flatten()
+    
+    # 选择簇类中心最高的那个簇类的最低相似度作为阈值
+    if len(cluster_centers) > 0:
+        # 找到最高聚类中心
+        max_center_idx = np.argmax(cluster_centers)
+        max_center_value = cluster_centers[max_center_idx]
+        
+        # 获取属于最高聚类中心的所有相似度值
+        cluster_labels = kmeans.labels_
+        max_cluster_similarities = similarities_np[cluster_labels == max_center_idx].flatten()
+        
+        if len(max_cluster_similarities) > 0:
+            # 选择最高聚类中心簇类的最低相似度作为阈值
+            adaptive_threshold = np.min(max_cluster_similarities)
+            print(f"  - All cluster centers: {[f'{center:.4f}' for center in cluster_centers]}")
+            print(f"  - Highest cluster center: {max_center_value:.4f} (index: {max_center_idx})")
+            print(f"  - Similarities in highest cluster: {[f'{s:.4f}' for s in max_cluster_similarities]}")
+            print(f"  - Min similarity in highest cluster: {adaptive_threshold:.4f}")
+        else:
+            # 如果最高聚类中心没有相似度值，使用默认阈值
+            adaptive_threshold = 0.8
+            print(f"  - Highest cluster center has no similarities, using default threshold: {adaptive_threshold:.4f}")
     else:
-        std_threshold = mean_sim + 0.5 * std_sim
+        # 如果没有聚类中心，使用默认阈值
+        adaptive_threshold = 0.8
+        print(f"  - No cluster centers found, using default threshold: {adaptive_threshold:.4f}")
     
-    # Method 3: Adaptive based on distribution shape
-    # Use the higher of the two methods, but cap at reasonable values
-    adaptive_threshold = max(percentile_threshold, std_threshold)
-    adaptive_threshold = min(adaptive_threshold, 0.95)  # Cap at 0.95
-    adaptive_threshold = max(adaptive_threshold, 0.3)  # Floor at 0.3
+    # 只应用上界约束，去掉下界约束
+    adaptive_threshold = min(adaptive_threshold, 0.95)  # 上界
     
-    # Special case: if all similarities are very low (e.g., all zeros), 
-    # use a more conservative threshold
-    if torch.max(valid_similarities).item() < 0.1:
-        print("  - Warning: All similarities are very low, using conservative threshold")
-        adaptive_threshold = min(0.1, adaptive_threshold)  # Use lower threshold for very low similarities
-    
-    print(f"Dynamic threshold calculation:")
+    print(f"K-means dynamic threshold calculation:")
     print(f"  - Number of valid similarities: {len(valid_similarities)}")
     print(f"  - Min similarity: {torch.min(valid_similarities).item():.4f}")
     print(f"  - Max similarity: {torch.max(valid_similarities).item():.4f}")
-    print(f"  - Mean similarity: {mean_sim:.4f}")
-    print(f"  - Std similarity: {std_sim:.4f}")
-    print(f"  - 75th percentile: {percentile_threshold:.4f}")
-    print(f"  - Mean + 0.5*std: {std_threshold:.4f}")
+    print(f"  - Optimal K (elbow method): {optimal_k}")
+    print(f"  - Cluster centers: {[f'{center:.4f}' for center in cluster_centers]}")
+    print(f"  - Min similarity in highest cluster: {adaptive_threshold:.4f}")
     print(f"  - Selected threshold: {adaptive_threshold:.4f}")
     print(f"  - Original threshold: {flags.threshold:.4f}")
     
