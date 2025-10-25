@@ -16,6 +16,114 @@ from ultra import parse
 mydir = os.getcwd()
 flags = parse.load_flags(os.path.join(mydir, "flags.yaml"))
 
+def load_relation_types(dataset_name):
+    """
+    Load relation types from JSON file based on dataset name.
+    
+    Args:
+        dataset_name (str): Name of the dataset (e.g., 'CoDExMedium', 'FB15k237', 'WN18RR')
+    
+    Returns:
+        dict: Dictionary mapping relation names to their types ('Symmetric', 'Asymmetric', 'Antisymmetric')
+    """
+    json_path = f"/T20030104/ynj/semma/openrouter/relations_type/gpt-4o-2024-11-20/{dataset_name}.json"
+    
+    if not os.path.exists(json_path):
+        print(f"Warning: Relation types file not found at {json_path}")
+        return {}
+    
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    return data.get('relations_type', {})
+
+def get_relation_type(relation_name, relation_types_dict):
+    """
+    Get the type of a relation from the loaded types dictionary.
+    
+    Args:
+        relation_name (str): Name of the relation
+        relation_types_dict (dict): Dictionary mapping relation names to types
+    
+    Returns:
+        str: Relation type ('Symmetric', 'Asymmetric', 'Antisymmetric') or 'Asymmetric' as default
+    """
+    return relation_types_dict.get(relation_name, 'Asymmetric')
+
+def get_inverse_relation_semantics(dataset_name, relation_name):
+    """
+    Get inverse relation semantics (name and description) from JSON file.
+    
+    Args:
+        dataset_name (str): Name of the dataset
+        relation_name (str): Name of the original relation
+    
+    Returns:
+        tuple: (inverse_relation_name, inverse_relation_description)
+    """
+    json_path = f"/T20030104/ynj/semma/openrouter/relations_type/gpt-4o-2024-11-20/{dataset_name}.json"
+    
+    if not os.path.exists(json_path):
+        print(f"Warning: Relation types file not found at {json_path}")
+        return "", ""
+    
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    cleaned_inverse_relations = data.get('cleaned_inverse_relations', {})
+    inverse_relations_descriptions = data.get('inverse_relations_descriptions', {})
+    
+    inverse_name = cleaned_inverse_relations.get(relation_name, "")
+    inverse_desc = inverse_relations_descriptions.get(relation_name, "")
+    
+    return inverse_name, inverse_desc
+
+def generate_inverse_embeddings_for_asymmetric(relation_names, dataset_name, model_embed="jinaai"):
+    """
+    Generate embeddings for inverse relations of asymmetric relations using semantic information.
+    
+    Args:
+        relation_names (list): List of relation names
+        dataset_name (str): Name of the dataset
+        model_embed (str): Embedding model to use
+    
+    Returns:
+        torch.Tensor: Embeddings for inverse relations
+    """
+    device = torch.device(f"cuda:{flags.gpus}" if torch.cuda.is_available() else "cpu")
+    
+    # Load relation types
+    relation_types_dict = load_relation_types(dataset_name)
+    
+    # Prepare semantic information for asymmetric relations
+    inverse_semantic_texts = []
+    
+    for relation_name in relation_names:
+        relation_type = get_relation_type(relation_name, relation_types_dict)
+        
+        if relation_type == 'Asymmetric':
+            # Get inverse relation semantics
+            inverse_name, inverse_desc = get_inverse_relation_semantics(dataset_name, relation_name)
+            
+            # Combine name and description for embedding
+            if inverse_name and inverse_desc:
+                semantic_text = f"{inverse_name}: {inverse_desc}"
+            elif inverse_name:
+                semantic_text = inverse_name
+            elif inverse_desc:
+                semantic_text = inverse_desc
+            else:
+                # Fallback to original relation name if no inverse semantics available
+                semantic_text = relation_name
+        else:
+            # For symmetric and antisymmetric relations, use original relation name
+            semantic_text = relation_name
+        
+        inverse_semantic_texts.append(semantic_text)
+    
+    # Generate embeddings using the same model as original relations
+    return get_relation_embeddings(inverse_semantic_texts, model_embed)
+
 def edge_match(edge_index, query_index):
     # O((n + q)logn) time
     # O(n) memory
@@ -639,7 +747,30 @@ def build_relation_graph(graph):
     
     return graph
 
-def order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings = None):
+def order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings = None, dataset_name = None):
+    """
+    Order embeddings for both original and inverse relations based on relation types.
+    
+    Args:
+        embeddings: Original relation embeddings
+        relation_names: List of relation names
+        graph: Graph object
+        num_rels: Number of relations
+        inv_embeddings: Pre-computed inverse embeddings (optional)
+        dataset_name: Name of the dataset for relation type classification
+    
+    Returns:
+        List of ordered embeddings for both original and inverse relations
+    """
+    # Check if inverse relation classification is enabled
+    if hasattr(flags, 'is-inverse-relation-classify') and getattr(flags, 'is-inverse-relation-classify', False) and dataset_name:
+        return order_embeddings_with_classification(embeddings, relation_names, graph, num_rels, dataset_name)
+    else:
+        # Original logic
+        return order_embeddings_original(embeddings, relation_names, graph, num_rels, inv_embeddings)
+
+def order_embeddings_original(embeddings, relation_names, graph, num_rels, inv_embeddings = None):
+    """Original embedding ordering logic."""
     ordered_embeddings = {}
     for i in range(len(embeddings)):
         if(relation_names[i] in graph.edge2id):
@@ -665,7 +796,62 @@ def order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings
 
     return embeddings
 
-def build_relation_graph_exp(graph):
+def order_embeddings_with_classification(embeddings, relation_names, graph, num_rels, dataset_name):
+    """
+    Order embeddings based on relation type classification.
+    
+    Strategy:
+    - Symmetric relations: inverse embedding = original embedding
+    - Antisymmetric relations: inverse embedding = -original embedding  
+    - Asymmetric relations: inverse embedding = semantic-based embedding
+    """
+    # Load relation types
+    relation_types_dict = load_relation_types(dataset_name)
+    
+    # Generate inverse embeddings for asymmetric relations using semantic information
+    asymmetric_inverse_embeddings = generate_inverse_embeddings_for_asymmetric(
+        relation_names, dataset_name, flags.model_embed
+    )
+    
+    ordered_embeddings = {}
+    for i in range(len(embeddings)):
+        if(relation_names[i] in graph.edge2id):
+            relation_name = relation_names[i]
+            relation_type = get_relation_type(relation_name, relation_types_dict)
+            
+            # Store original embedding
+            ordered_embeddings[graph.edge2id[relation_name]] = embeddings[i]
+            
+            # Generate inverse embedding based on relation type
+            if relation_type == 'Symmetric':
+                # Symmetric: inverse embedding = original embedding
+                inverse_embedding = embeddings[i]
+            elif relation_type == 'Antisymmetric':
+                # Antisymmetric: inverse embedding = -original embedding
+                inverse_embedding = -embeddings[i]
+            else:  # Asymmetric
+                # Asymmetric: use semantic-based embedding
+                inverse_embedding = asymmetric_inverse_embeddings[i]
+            
+            ordered_embeddings[graph.edge2id[relation_name] + len(graph.edge2id)] = inverse_embedding
+
+    # Create final embeddings list
+    final_embeddings = []
+    for i in range(2*len(graph.edge2id)):
+        if i in ordered_embeddings:
+            final_embeddings.append(ordered_embeddings[i])
+        else:
+            # 如果索引不存在，使用零向量或默认值
+            if len(final_embeddings) > 0:
+                final_embeddings.append(torch.zeros_like(final_embeddings[0]))
+            else:
+                # 如果这是第一个元素且缺失，创建一个默认的零向量
+                # 假设embedding维度为64（根据代码中的truncate_dim=64）
+                final_embeddings.append(torch.zeros(64))
+
+    return final_embeddings
+
+def build_relation_graph_exp(graph, dataset_name=None):
     # Extract existing edge indices and types
     k = flags.k
     edge_index, edge_type = graph.edge_index, graph.edge_type
@@ -786,9 +972,9 @@ def build_relation_graph_exp(graph):
         embeddings_llm_name = get_relation_embeddings(cleaned_relations, flags.model_embed)
         embeddings_llm_desc = get_relation_embeddings(rel_desc, flags.model_embed)
         embeddings_llm_inv_desc = get_relation_embeddings(inv_desc, flags.model_embed)
-        embeddings_nollm = order_embeddings(embeddings_nollm, relation_names, graph, num_rels)
-        embeddings_llm_name = order_embeddings(embeddings_llm_name, relation_names, graph, num_rels)
-        embeddings_llm_desc = order_embeddings(embeddings_llm_desc, relation_names, graph, num_rels, embeddings_llm_inv_desc)
+        embeddings_nollm = order_embeddings(embeddings_nollm, relation_names, graph, num_rels, dataset_name=dataset_name)
+        embeddings_llm_name = order_embeddings(embeddings_llm_name, relation_names, graph, num_rels, dataset_name=dataset_name)
+        embeddings_llm_desc = order_embeddings(embeddings_llm_desc, relation_names, graph, num_rels, embeddings_llm_inv_desc, dataset_name=dataset_name)
         embeddings = [
             (a + b + c) / 3
             for a, b, c in zip(embeddings_nollm, embeddings_llm_name, embeddings_llm_desc)
@@ -799,9 +985,9 @@ def build_relation_graph_exp(graph):
         embeddings_llm_name = get_relation_embeddings(cleaned_relations, flags.model_embed)
         embeddings_llm_desc = get_relation_embeddings(rel_desc, flags.model_embed)
         embeddings_llm_inv_desc = get_relation_embeddings(inv_desc, flags.model_embed)
-        embeddings_nollm = order_embeddings(embeddings_nollm, relation_names, graph, num_rels)
-        embeddings_llm_name = order_embeddings(embeddings_llm_name, relation_names, graph, num_rels)
-        embeddings_llm_desc = order_embeddings(embeddings_llm_desc, relation_names, graph, num_rels, embeddings_llm_inv_desc)
+        embeddings_nollm = order_embeddings(embeddings_nollm, relation_names, graph, num_rels, dataset_name=dataset_name)
+        embeddings_llm_name = order_embeddings(embeddings_llm_name, relation_names, graph, num_rels, dataset_name=dataset_name)
+        embeddings_llm_desc = order_embeddings(embeddings_llm_desc, relation_names, graph, num_rels, embeddings_llm_inv_desc, dataset_name=dataset_name)
         embeddings = [
             (a + b + c)
             for a, b, c in zip(embeddings_nollm, embeddings_llm_name, embeddings_llm_desc)
@@ -809,14 +995,14 @@ def build_relation_graph_exp(graph):
 
     elif(flags.rg2_embedding == "no llm"):
         embeddings = get_relation_embeddings(relation_names, flags.model_embed)
-        embeddings = order_embeddings(embeddings, relation_names, graph, num_rels)
+        embeddings = order_embeddings(embeddings, relation_names, graph, num_rels, dataset_name=dataset_name)
     elif(flags.rg2_embedding == "llm name"):
         embeddings = get_relation_embeddings(cleaned_relations, flags.model_embed)
-        embeddings = order_embeddings(embeddings, relation_names, graph, num_rels)
+        embeddings = order_embeddings(embeddings, relation_names, graph, num_rels, dataset_name=dataset_name)
     elif(flags.rg2_embedding == "llm description"):
         embeddings = get_relation_embeddings(rel_desc, flags.model_embed) # (num_relations, embedding size)
         inv_embeddings = get_relation_embeddings(inv_desc, flags.model_embed)
-        embeddings = order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings)
+        embeddings = order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings, dataset_name=dataset_name)
 
     if flags.harder_setting == True:
         if hasattr(graph, "is_harder") and graph.is_harder == True:            

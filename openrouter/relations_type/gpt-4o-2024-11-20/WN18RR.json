@@ -1,61 +1,54 @@
 {
-    "cleaned_relations": {
-        "_also_see": "Also See",
-        "_derivationally_related_form": "Derivationally Related Form",
-        "_has_part": "Has Part",
-        "_hypernym": "Hypernym",
-        "_instance_hypernym": "Instance Hypernym",
-        "_member_meronym": "Member Meronym",
-        "_member_of_domain_region": "Member of Domain Region",
-        "_member_of_domain_usage": "Member of Domain Usage",
-        "_similar_to": "Similar To",
-        "_synset_domain_topic_of": "Synset Domain Topic Of",
-        "_verb_group": "Verb Group"
+    "relations_type": {
+        "_also_see": "Symmetric",
+        "_derivationally_related_form": "Symmetric",
+        "_has_part": "Asymmetric",
+        "_hypernym": "Asymmetric",
+        "_instance_hypernym": "Asymmetric",
+        "_member_meronym": "Asymmetric",
+        "_member_of_domain_region": "Asymmetric",
+        "_member_of_domain_usage": "Asymmetric",
+        "_similar_to": "Symmetric",
+        "_synset_domain_topic_of": "Asymmetric",
+        "_verb_group": "Symmetric"
     },
-    "relation_descriptions": {
-        "_also_see": [
-            "related for reference",
-            "reference related to"
-        ],
-        "_derivationally_related_form": [
-            "linked by derivation",
-            "linked by derivation"
-        ],
-        "_has_part": [
-            "contains as part",
-            "part of whole"
-        ],
-        "_hypernym": [
-            "is broader category",
-            "subcategory of type"
-        ],
-        "_instance_hypernym": [
-            "is specific instance",
-            "general category of instance"
-        ],
-        "_member_meronym": [
-            "has member component",
-            "is component member of"
-        ],
-        "_member_of_domain_region": [
-            "region-related member",
-            "member related to region"
-        ],
-        "_member_of_domain_usage": [
-            "usage-related term",
-            "term related to usage"
-        ],
-        "_similar_to": [
-            "shares similarity with",
-            "shares similarity with"
-        ],
-        "_synset_domain_topic_of": [
-            "topic linked to domain",
-            "domain linked to topic"
-        ],
-        "_verb_group": [
-            "same verb group",
-            "same verb group"
-        ]
+    "Examples": [
+		["write.v.01","_also_see","write_out.v.01"],
+		["cover.v.01","_derivationally_related_form","binding.n.05"],
+		["department_of_justice.n.01","_has_part","federal_bureau_of_investigation.n.01"],
+		["land_reform.n.01","_hypernym","reform.n.01"],
+		["kamet.n.01","_instance_hypernym","mountain_peak.n.01"],
+		["personalized.s.02","_member_meronym","acarina.n.01"],
+		["europe.n.01","_member_of_domain_region","megalith.n.01"],
+		["ethnic_slur.n.01","_member_of_domain_usage","darky.n.01"],
+		["aesthetic.s.03","_similar_to","tasteful.a.01"],
+		["land_reform.n.01","_synset_domain_topic_of","government.n.02"],
+		["cover.v.01","_verb_group","overlay.v.01"]
+	],
+    "cleaned_inverse_relations": {
+        "_also_see": "",
+        "_derivationally_related_form": "",
+        "_has_part": "part of",
+        "_hypernym": "hyponym",
+        "_instance_hypernym": "instance of",
+        "_member_meronym": "member of",
+        "_member_of_domain_region": "domain region of",
+        "_member_of_domain_usage": "domain usage of",
+        "_similar_to": "",
+        "_synset_domain_topic_of": "domain topic",
+        "_verb_group": ""
+    },
+    "inverse_relations_descriptions": {
+        "_also_see": "",
+        "_derivationally_related_form": "",
+        "_has_part": "component relationship",
+        "_hypernym": "semantic hierarchy",
+        "_instance_hypernym": "categorical membership",
+        "_member_meronym": "collective membership",
+        "_member_of_domain_region": "geographic domain",
+        "_member_of_domain_usage": "usage domain",
+        "_similar_to": "",
+        "_synset_domain_topic_of": "subject classification",
+        "_verb_group": ""
     }
 }

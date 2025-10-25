@@ -1087,10 +1087,10 @@ def FB15k237(root, **kwargs):
         valid_data = build_relation_graph(valid_data)
         test_data = build_relation_graph(test_data)
     else:
-        
-        train_data = build_relation_graph_exp(train_data)
-        valid_data = build_relation_graph_exp(valid_data)
-        test_data = build_relation_graph_exp(test_data)
+        dataset_name = kwargs.get('dataset_name', 'FB15k237')
+        train_data = build_relation_graph_exp(train_data, dataset_name=dataset_name)
+        valid_data = build_relation_graph_exp(valid_data, dataset_name=dataset_name)
+        test_data = build_relation_graph_exp(test_data, dataset_name=dataset_name)
 
     train_data.train_id2entity = train_data.id2entity
     valid_data.train_id2entity = train_data.id2entity
@@ -1175,9 +1175,10 @@ def WN18RR(root, **kwargs):
         test_data = build_relation_graph(test_data)
     else:
         filepath = os.path.join(mydir, "descriptions/WN18RR.json")
-        train_data = build_relation_graph_exp(train_data)
-        valid_data = build_relation_graph_exp(valid_data)
-        test_data = build_relation_graph_exp(test_data)
+        dataset_name = kwargs.get('dataset_name', 'WN18RR')
+        train_data = build_relation_graph_exp(train_data, dataset_name=dataset_name)
+        valid_data = build_relation_graph_exp(valid_data, dataset_name=dataset_name)
+        test_data = build_relation_graph_exp(test_data, dataset_name=dataset_name)
 
     train_data.train_id2entity = train_data.id2entity
     valid_data.train_id2entity = train_data.id2entity
