@@ -366,132 +366,140 @@ def find_top_x_percent(embeddings, relation_names):
  
     return top_x_pairs
 
-def calculate_elbow_k(similarities, max_k=10):
-    """
-    使用肘部法则选择最优K值
-    """
-    from sklearn.cluster import KMeans
-    import numpy as np
-    
-    # 转换为numpy数组
-    similarities_np = similarities.cpu().numpy().reshape(-1, 1)
-    
-    # 计算不同K值的SSE (Sum of Squared Errors)
-    sse = []
-    k_range = range(2, min(max_k + 1, len(similarities_np) // 2))
-    
-    for k in k_range:
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-        kmeans.fit(similarities_np)
-        sse.append(kmeans.inertia_)
-    
-    if len(sse) < 2:
-        return 2  # 默认返回2
-    
-    # 计算二阶导数来找到拐点
-    sse = np.array(sse)
-    second_derivative = np.diff(sse, 2)
-    
-    # 找到二阶导数最大的点（拐点）
-    if len(second_derivative) > 0:
-        elbow_k = k_range[np.argmax(second_derivative) + 2]  # +2 因为二阶导数比原数组短2
-    else:
-        elbow_k = 2
-    
-    return elbow_k
 
-def calculate_dynamic_threshold(embeddings):
+def compute_ppr_scores(embeddings, alpha=0.85, max_iter=100, tolerance=1e-6):
+    # 确保参数类型正确
+    alpha = float(alpha)
+    max_iter = int(max_iter)
+    tolerance = float(tolerance)
     """
-    计算基于K-means聚类的自适应阈值
-    使用K-means对相似度值进行聚类，计算所有簇中心的平均值作为阈值
-    """
-    from sklearn.cluster import KMeans
-    import numpy as np
+    使用Personalized PageRank (PPR)计算关系的重要性得分
+    基于关系嵌入的余弦相似度构建邻接矩阵，然后使用PPR算法计算每个关系的重要性
     
-    # Compute the cosine similarity matrix
+    Args:
+        embeddings: 关系嵌入张量 [num_relations, embedding_dim]
+        alpha: PPR的阻尼系数，控制随机游走的概率
+        max_iter: 最大迭代次数
+        tolerance: 收敛容忍度
+    
+    Returns:
+        ppr_scores: 每个关系的PPR得分 [num_relations]
+    """
+    device = embeddings.device
+    num_relations = embeddings.size(0)
+    
+    # 计算余弦相似度矩阵
     similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
     
-    # Mask the diagonal (self-similarity)
-    mask = torch.eye(similarity_matrix.size(0), device=similarity_matrix.device).bool()
+    # 将对角线设为0（自相似度）
+    mask = torch.eye(num_relations, device=device).bool()
+    similarity_matrix.masked_fill_(mask, 0.0)
+    
+    # 将相似度矩阵转换为邻接矩阵（保留正相似度）
+    adjacency_matrix = torch.where(similarity_matrix > 0, similarity_matrix, torch.zeros_like(similarity_matrix))
+    
+    # 计算度矩阵（每个节点的出度）
+    degree_matrix = torch.sum(adjacency_matrix, dim=1)
+    
+    # 避免除零错误，将度数为0的节点设为1
+    degree_matrix = torch.where(degree_matrix > 0, degree_matrix, torch.ones_like(degree_matrix))
+    
+    # 构建转移概率矩阵 P = D^(-1) * A
+    transition_matrix = adjacency_matrix / degree_matrix.unsqueeze(1)
+    
+    # 初始化PPR得分向量（均匀分布）
+    ppr_scores = torch.ones(num_relations, device=device) / num_relations
+    
+    # PPR迭代更新
+    for iteration in range(max_iter):
+        # 保存上一次的得分
+        prev_scores = ppr_scores.clone()
+        
+        # PPR更新公式: p = α * s + (1-α) * P^T * p
+        # 这里s是均匀分布，P^T是转移矩阵的转置
+        uniform_restart = torch.ones(num_relations, device=device) / num_relations
+        ppr_scores = alpha * uniform_restart + (1 - alpha) * torch.matmul(transition_matrix.T, ppr_scores)
+        
+        # 检查收敛
+        if torch.norm(ppr_scores - prev_scores) < tolerance:
+            print(f"PPR converged after {iteration + 1} iterations")
+            break
+    
+    return ppr_scores
+
+def find_pairs_with_ppr(embeddings, relation_names, top_k_ratio=0.1):
+    """
+    使用PPR得分来选择关系对，替代固定阈值方法
+    
+    Args:
+        embeddings: 关系嵌入张量
+        relation_names: 关系名称列表
+        top_k_ratio: 选择top-k比例的关系对
+    
+    Returns:
+        selected_pairs: 选中的关系对列表
+    """
+    device = embeddings.device
+    num_relations = embeddings.size(0)
+    
+    # 计算PPR得分
+    ppr_scores = compute_ppr_scores(embeddings, 
+                                  alpha=float(flags.ppr_alpha), 
+                                  max_iter=int(flags.ppr_max_iter), 
+                                  tolerance=float(flags.ppr_tolerance))
+    
+    # 计算余弦相似度矩阵
+    similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
+    
+    # 将对角线设为-inf（避免自相似度）
+    mask = torch.eye(num_relations, device=device).bool()
     similarity_matrix.masked_fill_(mask, float('-inf'))
     
-    # Get upper triangular similarities (avoid duplicates)
-    num_relations = similarity_matrix.size(0)
+    # 计算关系对的综合得分：结合PPR得分和余弦相似度
+    # 对于关系对(i,j)，综合得分 = PPR_i * PPR_j * similarity_ij
+    ppr_weighted_similarity = ppr_scores.unsqueeze(1) * ppr_scores.unsqueeze(0) * similarity_matrix
+    
+    # 获取上三角矩阵的索引（避免重复计算）
     indices = torch.triu_indices(num_relations, num_relations, offset=1)
-    similarities = similarity_matrix[indices[0], indices[1]]
+    upper_tri_scores = ppr_weighted_similarity[indices[0], indices[1]]
     
-    # Remove -inf values (diagonal elements)
-    valid_similarities = similarities[similarities != float('-inf')]
+    # 选择top-k比例的关系对
+    num_pairs_to_select = max(1, int(len(upper_tri_scores) * top_k_ratio))
+    _, top_indices = torch.topk(upper_tri_scores, num_pairs_to_select)
     
-    if len(valid_similarities) == 0:
-        return flags.threshold  # fallback to original threshold
+    # 将索引转换回关系对
+    selected_pairs = []
+    for idx in top_indices:
+        row_idx = indices[0][idx].item()
+        col_idx = indices[1][idx].item()
+        selected_pairs.append((row_idx, col_idx))
     
-    # 转换为numpy数组进行聚类
-    similarities_np = valid_similarities.cpu().numpy().reshape(-1, 1)
+    print("====================================")
+    print(f"PPR-based relation pair selection:")
+    print(f"  - Total possible pairs: {len(upper_tri_scores)}")
+    print(f"  - Selected pairs: {len(selected_pairs)}")
+    print(f"  - Selection ratio: {len(selected_pairs) / len(upper_tri_scores):.4f}")
+    print(f"  - PPR alpha: {flags.ppr_alpha}")
+    print(f"  - PPR max iterations: {flags.ppr_max_iter}")
     
-    # 使用肘部法则选择最优K值
-    optimal_k = calculate_elbow_k(valid_similarities, max_k=min(10, len(similarities_np) // 2))
-    
-    # 执行K-means聚类
-    kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
-    kmeans.fit(similarities_np)
-    
-    # 获取所有簇中心
-    cluster_centers = kmeans.cluster_centers_.flatten()
-    
-    # 选择簇类中心最高的那个簇类的最低相似度作为阈值
-    if len(cluster_centers) > 0:
-        # 找到最高聚类中心
-        max_center_idx = np.argmax(cluster_centers)
-        max_center_value = cluster_centers[max_center_idx]
-        
-        # 获取属于最高聚类中心的所有相似度值
-        cluster_labels = kmeans.labels_
-        max_cluster_similarities = similarities_np[cluster_labels == max_center_idx].flatten()
-        
-        if len(max_cluster_similarities) > 0:
-            # 选择最高聚类中心簇类的最低相似度作为阈值
-            adaptive_threshold = np.min(max_cluster_similarities)
-            print(f"  - All cluster centers: {[f'{center:.4f}' for center in cluster_centers]}")
-            print(f"  - Highest cluster center: {max_center_value:.4f} (index: {max_center_idx})")
-            print(f"  - Similarities in highest cluster: {[f'{s:.4f}' for s in max_cluster_similarities]}")
-            print(f"  - Min similarity in highest cluster: {adaptive_threshold:.4f}")
-        else:
-            # 如果最高聚类中心没有相似度值，使用默认阈值
-            adaptive_threshold = 0.8
-            print(f"  - Highest cluster center has no similarities, using default threshold: {adaptive_threshold:.4f}")
-    else:
-        # 如果没有聚类中心，使用默认阈值
-        adaptive_threshold = 0.8
-        print(f"  - No cluster centers found, using default threshold: {adaptive_threshold:.4f}")
-    
-    # 只应用上界约束，去掉下界约束
-    adaptive_threshold = min(adaptive_threshold, 0.95)  # 上界
-    
-    print(f"K-means dynamic threshold calculation:")
-    print(f"  - Number of valid similarities: {len(valid_similarities)}")
-    print(f"  - Min similarity: {torch.min(valid_similarities).item():.4f}")
-    print(f"  - Max similarity: {torch.max(valid_similarities).item():.4f}")
-    print(f"  - Optimal K (elbow method): {optimal_k}")
-    print(f"  - Cluster centers: {[f'{center:.4f}' for center in cluster_centers]}")
-    print(f"  - Min similarity in highest cluster: {adaptive_threshold:.4f}")
-    print(f"  - Selected threshold: {adaptive_threshold:.4f}")
-    print(f"  - Original threshold: {flags.threshold:.4f}")
-    
-    return adaptive_threshold
+    return selected_pairs
+
 
 def find_pairs_above_threshold(embeddings, relation_names):
+    # Check if PPR-based threshold is enabled
+    if hasattr(flags, 'use_ppr_threshold') and flags.use_ppr_threshold:
+        # Use PPR-based dynamic selection
+        return find_pairs_with_ppr(embeddings, relation_names, top_k_ratio=0.1)
+    
+    # Original fixed threshold approach
     # Compute the cosine similarity matrix
     similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
     # Mask the diagonal (self-similarity)
     mask = torch.eye(similarity_matrix.size(0), device=similarity_matrix.device).bool()
     similarity_matrix.masked_fill_(mask, float('-inf'))
     
-    # Use dynamic threshold if enabled
-    if hasattr(flags, 'dynamic_threshold') and flags.dynamic_threshold:
-        threshold = calculate_dynamic_threshold(embeddings)
-    else:
-        threshold = flags.threshold
+    # Use fixed threshold
+    threshold = flags.threshold
     
     num_relations = similarity_matrix.size(0)
     row_indices, col_indices = torch.where(similarity_matrix > threshold)

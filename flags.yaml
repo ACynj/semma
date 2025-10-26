@@ -4,11 +4,14 @@ rg2_embedding: combined-sum # ["combined", "combined-sum", "no llm", "llm name",
 k: 0 # should be positive if you want to add specific num of 5th type edges to each relation
 model_embed: jinaai # [sentbert, jinaai]
 topx: 0 # top x% of all relation pairs
-threshold: 0.8 # threshold for constructing rg2
-dynamic_threshold: False # [True, False], if True, use adaptive threshold based on similarity distribution
+threshold: 0.8 # threshold for constructing rg2 (only used when use_ppr_threshold=False)
+use_ppr_threshold: True # [True, False], if True, use PPR-based dynamic threshold instead of fixed threshold
+ppr_alpha: 0.85 # damping coefficient for PPR algorithm
+ppr_max_iter: 100 # maximum iterations for PPR convergence
+ppr_tolerance: 1e-6 # convergence tolerance for PPR
 embedding_combiner: mlp # [mlp, concat, attention]
 eval_on_valid: False # [True, False]
 use_cos_sim_weights: True # [True, False], if True, we use cosine similarity weights for the 5th type edges
 gpus: 0 # [0, 1, 2] # which gpu to use
 harder_setting: False # [True, False], if True, we use harder setting where there are new relations 
-is-inverse-relation-classify: True # [True, False], if True, use relation type classification for inverse relation embeddings
+is-inverse-relation-classify: False # [True, False], if True, use relation type classification for inverse relation embeddings
