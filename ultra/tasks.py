@@ -873,11 +873,11 @@ def build_relation_graph_exp(graph, dataset_name=None):
     file_path = None
 
     if flags.LLM == "gpt4o":
-        file_path = os.path.join(mydir, "openrouter/descriptions/gpt-4o-2024-11-20", graph.dataset + ".json")
+        file_path = os.path.join(mydir, "openrouter/descriptions/gpt-4o-2024-11-20", dataset_name + ".json")
     elif flags.LLM == "qwen3-32b":
-        file_path = os.path.join(mydir, "openrouter/descriptions/qwen3-32b", graph.dataset + ".json")
+        file_path = os.path.join(mydir, "openrouter/descriptions/qwen3-32b", dataset_name + ".json")
     elif flags.LLM == "deepseekv3":
-        file_path = os.path.join(mydir, "openrouter/descriptions/deepseek-chat-v3-0324", graph.dataset + ".json")
+        file_path = os.path.join(mydir, "openrouter/descriptions/deepseek-chat-v3-0324", dataset_name + ".json")
 
     if file_path is not None:
         dict = load_file(file_path)

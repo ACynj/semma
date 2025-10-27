@@ -4010,6 +4010,8 @@ class JointDataset(InMemoryDataset):
     }
 
     def __init__(self, root, graphs, transform=None, pre_transform=None):
+        if(flags.run != "ultra"):
+            pre_transform = build_relation_graph_exp
         self.graphs = [self.datasets_map[ds](root=root, dataset_name = ds, dataset_version=None) for ds in graphs]
         self.num_graphs = len(graphs)
         super().__init__(root, transform, pre_transform)
