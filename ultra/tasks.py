@@ -384,155 +384,28 @@ def find_top_x_percent(embeddings, relation_names):
     return top_x_pairs
 
 
-def compute_ppr_scores(embeddings, alpha=0.85, max_iter=100, tolerance=1e-6):
-    # 确保参数类型正确
-    alpha = float(alpha)
-    max_iter = int(max_iter)
-    tolerance = float(tolerance)
-    """
-    使用Personalized PageRank (PPR)计算关系的重要性得分
-    基于关系嵌入的余弦相似度构建邻接矩阵，然后使用PPR算法计算每个关系的重要性
-    
-    Args:
-        embeddings: 关系嵌入张量 [num_relations, embedding_dim]
-        alpha: PPR的阻尼系数，控制随机游走的概率
-        max_iter: 最大迭代次数
-        tolerance: 收敛容忍度
-    
-    Returns:
-        ppr_scores: 每个关系的PPR得分 [num_relations]
-    """
-    device = embeddings.device
-    num_relations = embeddings.size(0)
-    
-    # 计算余弦相似度矩阵
-    similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
-    
-    # 将对角线设为0（自相似度）
-    mask = torch.eye(num_relations, device=device).bool()
-    similarity_matrix.masked_fill_(mask, 0.0)
-    
-    # 将相似度矩阵转换为邻接矩阵（保留正相似度）
-    adjacency_matrix = torch.where(similarity_matrix > 0, similarity_matrix, torch.zeros_like(similarity_matrix))
-    
-    # 计算度矩阵（每个节点的出度）
-    degree_matrix = torch.sum(adjacency_matrix, dim=1)
-    
-    # 避免除零错误，将度数为0的节点设为1
-    degree_matrix = torch.where(degree_matrix > 0, degree_matrix, torch.ones_like(degree_matrix))
-    
-    # 构建转移概率矩阵 P = D^(-1) * A
-    transition_matrix = adjacency_matrix / degree_matrix.unsqueeze(1)
-    
-    # 初始化PPR得分向量（均匀分布）
-    ppr_scores = torch.ones(num_relations, device=device) / num_relations
-    
-    # PPR迭代更新
-    for iteration in range(max_iter):
-        # 保存上一次的得分
-        prev_scores = ppr_scores.clone()
-        
-        # PPR更新公式: p = α * s + (1-α) * P^T * p
-        # 这里s是均匀分布，P^T是转移矩阵的转置
-        uniform_restart = torch.ones(num_relations, device=device) / num_relations
-        ppr_scores = alpha * uniform_restart + (1 - alpha) * torch.matmul(transition_matrix.T, ppr_scores)
-        
-        # 检查收敛
-        if torch.norm(ppr_scores - prev_scores) < tolerance:
-            print(f"PPR converged after {iteration + 1} iterations")
-            break
-    
-    return ppr_scores
-
-def find_pairs_with_ppr(embeddings, relation_names, top_k_ratio=0.1):
-    """
-    使用PPR得分来选择关系对，替代固定阈值方法
-    
-    Args:
-        embeddings: 关系嵌入张量
-        relation_names: 关系名称列表
-        top_k_ratio: 选择top-k比例的关系对
-    
-    Returns:
-        selected_pairs: 选中的关系对列表
-    """
-    device = embeddings.device
-    num_relations = embeddings.size(0)
-    
-    # 计算PPR得分
-    ppr_scores = compute_ppr_scores(embeddings, 
-                                  alpha=float(flags.ppr_alpha), 
-                                  max_iter=int(flags.ppr_max_iter), 
-                                  tolerance=float(flags.ppr_tolerance))
-    
-    # 计算余弦相似度矩阵
-    similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
-    
-    # 将对角线设为-inf（避免自相似度）
-    mask = torch.eye(num_relations, device=device).bool()
-    similarity_matrix.masked_fill_(mask, float('-inf'))
-    
-    # 计算关系对的综合得分：结合PPR得分和余弦相似度
-    # 对于关系对(i,j)，综合得分 = PPR_i * PPR_j * similarity_ij
-    ppr_weighted_similarity = ppr_scores.unsqueeze(1) * ppr_scores.unsqueeze(0) * similarity_matrix
-    
-    # 获取上三角矩阵的索引（避免重复计算）
-    indices = torch.triu_indices(num_relations, num_relations, offset=1)
-    upper_tri_scores = ppr_weighted_similarity[indices[0], indices[1]]
-    
-    # 选择top-k比例的关系对
-    num_pairs_to_select = max(1, int(len(upper_tri_scores) * top_k_ratio))
-    _, top_indices = torch.topk(upper_tri_scores, num_pairs_to_select)
-    
-    # 将索引转换回关系对
-    selected_pairs = []
-    for idx in top_indices:
-        row_idx = indices[0][idx].item()
-        col_idx = indices[1][idx].item()
-        selected_pairs.append((row_idx, col_idx))
-    
-    print("====================================")
-    print(f"PPR-based relation pair selection:")
-    print(f"  - Total possible pairs: {len(upper_tri_scores)}")
-    print(f"  - Selected pairs: {len(selected_pairs)}")
-    print(f"  - Selection ratio: {len(selected_pairs) / len(upper_tri_scores):.4f}")
-    print(f"  - PPR alpha: {flags.ppr_alpha}")
-    print(f"  - PPR max iterations: {flags.ppr_max_iter}")
-    
-    return selected_pairs
-
-
 def find_pairs_above_threshold(embeddings, relation_names):
-    # Check if PPR-based threshold is enabled
-    if hasattr(flags, 'use_ppr_threshold') and flags.use_ppr_threshold:
-        # Use PPR-based dynamic selection
-        return find_pairs_with_ppr(embeddings, relation_names, top_k_ratio=0.1)
-    
-    # Original fixed threshold approach
-    # Compute the cosine similarity matrix
+    """
+    使用固定阈值0.8找到余弦相似度超过阈值的关系对
+    """
+    # 计算余弦相似度矩阵
     similarity_matrix = F.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2)
-    # Mask the diagonal (self-similarity)
+    # 屏蔽对角线（自相似度）
     mask = torch.eye(similarity_matrix.size(0), device=similarity_matrix.device).bool()
     similarity_matrix.masked_fill_(mask, float('-inf'))
     
-    # Use fixed threshold
-    threshold = flags.threshold
+    # 使用固定阈值0.8
+    threshold = 0.8
     
     num_relations = similarity_matrix.size(0)
     row_indices, col_indices = torch.where(similarity_matrix > threshold)
     
-    # Convert to relation index pairs
+    # 转换为关系索引对
     selected_pairs = [(row.item(), col.item()) for row, col in zip(row_indices, col_indices)]
     
     print("====================================")
     print(f"Number of relation pairs with cosine similarity > {threshold:.4f}: {len(selected_pairs)}")
-    # Uncomment if you want to print the actual relations
-    # for row, col in zip(row_indices, col_indices):
-    #     rel1, rel2 = row.item(), col.item()
-    #     if(rel1 < num_relations // 2 and rel2 < num_relations // 2):
-    #         sim_value = similarity_matrix[rel1, rel2].item()
-    #         print(relation_names[rel1], "---", relation_names[rel2], "---", sim_value)
-
+    
     return selected_pairs
 
 def load_file(path):
