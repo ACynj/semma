@@ -264,9 +264,76 @@ class GrailInductiveDataset(InMemoryDataset):
         ]
 
     def download(self):
+        import ssl
+        import urllib.request
+        from urllib.error import URLError
+        import time
+        
+        print("🌐 开始下载GRAIL数据集...")
+        
         for url, path in zip(self.urls, self.raw_paths):
-            download_path = download_url(url % self.version, self.raw_dir)
-            os.rename(download_path, path)
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f"📥 正在下载 {url % self.version} (尝试 {attempt + 1}/{max_retries})...")
+                    download_path = download_url(url % self.version, self.raw_dir)
+                    os.rename(download_path, path)
+                    print(f"✅ 成功下载并保存到 {path}")
+                    break
+                except URLError as e:
+                    print(f"❌ 下载尝试 {attempt + 1} 失败: {e}")
+                    if attempt < max_retries - 1:
+                        print(f"⏳ {retry_delay} 秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                    else:
+                        print(f"❌ 经过 {max_retries} 次尝试后仍然失败")
+                        # 尝试使用requests库作为备选方案
+                        try:
+                            print(f"🔄 尝试使用备选下载方法...")
+                            self._download_with_requests(url % self.version, path)
+                        except Exception as e2:
+                            print(f"❌ 备选下载方法也失败: {e2}")
+                            raise e
+                except Exception as e:
+                    print(f"❌ 下载时发生意外错误: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise e
+        
+        print("🎉 GRAIL数据集下载完成!")
+    
+    def _download_with_requests(self, url: str, path: str) -> None:
+        """使用requests库的备选下载方法"""
+        try:
+            import requests
+            print(f"🔄 使用requests库下载: {url}")
+            
+            # 设置请求头
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            # 禁用SSL验证
+            response = requests.get(url, headers=headers, verify=False, timeout=30)
+            response.raise_for_status()
+            
+            # 保存文件
+            with open(path, 'wb') as f:
+                f.write(response.content)
+            
+            print(f"✅ 使用requests成功下载到 {path}")
+            
+        except ImportError:
+            print("❌ requests库未安装，无法使用备选下载方法")
+            raise
+        except Exception as e:
+            print(f"❌ requests下载失败: {e}")
+            raise
 
     def process(self):
         test_files = self.raw_paths[:3]

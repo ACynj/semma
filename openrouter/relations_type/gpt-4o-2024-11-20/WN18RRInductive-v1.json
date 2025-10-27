@@ -1,51 +1,82 @@
 {
-    "cleaned_relations": {
-        "_hypernym": "Hypernym",
-        "_derivationally_related_form": "Derivationally Related Form",
-        "_also_see": "Also See",
-        "_synset_domain_topic_of": "Synset Domain Topic Of",
-        "_has_part": "Has Part",
-        "_verb_group": "Verb Group",
-        "_member_meronym": "Member Meronym",
-        "_similar_to": "Similar To",
-        "_instance_hypernym": "Instance Hypernym"
+    "relations_type": {
+        "_hypernym": "Antisymmetric",
+        "_derivationally_related_form": "Symmetric",
+        "_also_see": "Symmetric",
+        "_synset_domain_topic_of": "Asymmetric",
+        "_has_part": "Antisymmetric",
+        "_verb_group": "Symmetric",
+        "_member_meronym": "Antisymmetric",
+        "_similar_to": "Symmetric",
+        "_instance_hypernym": "Antisymmetric"
     },
-    "relation_descriptions": {
-        "_hypernym": [
-            "is a broader term",
-            "is a narrower term"
+    "cleaned_inverse_relations": {
+        "_hypernym": "hyponym",
+        "_derivationally_related_form": "",
+        "_also_see": "",
+        "_synset_domain_topic_of": "domain_topic_of",
+        "_has_part": "part_of",
+        "_verb_group": "",
+        "_member_meronym": "member_holonym",
+        "_similar_to": "",
+        "_instance_hypernym": "instance_hyponym"
+    },
+    "inverse_relations_descriptions": {
+        "_hypernym": "specific concept relation",
+        "_derivationally_related_form": "",
+        "_also_see": "",
+        "_synset_domain_topic_of": "topic domain relation",
+        "_has_part": "component inclusion relation",
+        "_verb_group": "",
+        "_member_meronym": "group inclusion relation",
+        "_similar_to": "",
+        "_instance_hypernym": "instance subtype relation"
+    },
+    "Examples": [
+        [
+            "two.n.01",
+            "_hypernym",
+            "digit.n.01"
         ],
-        "_derivationally_related_form": [
-            "derivationally related word",
-            "derivationally related word"
+        [
+            "garrison.v.01",
+            "_derivationally_related_form",
+            "garrison.n.03"
         ],
-        "_also_see": [
-            "related concept to see",
-            "related concept to see"
+        [
+            "mark.v.05",
+            "_also_see",
+            "mark_off.v.01"
         ],
-        "_synset_domain_topic_of": [
-            "domain topic of",
-            "has domain topic"
+        [
+            "bitter_end.n.02",
+            "_synset_domain_topic_of",
+            "seafaring.n.01"
         ],
-        "_has_part": [
-            "contains as part",
-            "is part of"
+        [
+            "hairdo.n.01",
+            "_has_part",
+            "rat.n.05"
         ],
-        "_verb_group": [
-            "shares verb meaning",
-            "shares verb meaning"
+        [
+            "preen.v.03",
+            "_verb_group",
+            "dress.v.01"
         ],
-        "_member_meronym": [
-            "member of group",
-            "group containing member"
+        [
+            "family.n.02",
+            "_member_meronym",
+            "child.n.02"
         ],
-        "_similar_to": [
-            "has similar meaning",
-            "has similar meaning"
+        [
+            "near.a.01",
+            "_similar_to",
+            "nearby.s.01"
         ],
-        "_instance_hypernym": [
-            "specific instance of",
-            "general category of"
+        [
+            "creation.n.05",
+            "_instance_hypernym",
+            "beginning.n.05"
         ]
-    }
+    ]
 }

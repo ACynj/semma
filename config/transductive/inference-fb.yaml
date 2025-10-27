@@ -1,8 +1,8 @@
-output_dir: output/ 
+output_dir: ./output/ 
 
 dataset:
   class: {{ dataset }}
-  root: kg-datasets/
+  root: ./kg-datasets/
 
 model:
   class: Ultra

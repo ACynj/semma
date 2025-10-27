@@ -92,8 +92,22 @@ def generate_inverse_embeddings_for_asymmetric(relation_names, dataset_name, mod
     """
     device = torch.device(f"cuda:{flags.gpus}" if torch.cuda.is_available() else "cpu")
     
+    print(f"🧠 [语义嵌入生成] 为非对称关系生成逆关系嵌入")
+    print(f"   - 嵌入模型: {model_embed}")
+    print(f"   - 设备: {device}")
+    
     # Load relation types
     relation_types_dict = load_relation_types(dataset_name)
+    
+    # Count asymmetric relations
+    asymmetric_count = 0
+    for relation_name in relation_names:
+        relation_type = get_relation_type(relation_name, relation_types_dict)
+        if relation_type == 'Asymmetric':
+            asymmetric_count += 1
+    
+    print(f"   - 发现 {asymmetric_count} 个非对称关系需要语义嵌入")
+    print(f"   - 总关系数: {len(relation_names)}")
     
     # Prepare semantic information for asymmetric relations
     inverse_semantic_texts = []
@@ -122,7 +136,10 @@ def generate_inverse_embeddings_for_asymmetric(relation_names, dataset_name, mod
         inverse_semantic_texts.append(semantic_text)
     
     # Generate embeddings using the same model as original relations
-    return get_relation_embeddings(inverse_semantic_texts, model_embed)
+    embeddings = get_relation_embeddings(inverse_semantic_texts, model_embed)
+    print(f"   - 成功生成 {len(embeddings)} 个逆关系嵌入向量")
+    
+    return embeddings
 
 def edge_match(edge_index, query_index):
     # O((n + q)logn) time
@@ -772,13 +789,25 @@ def order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings
     """
     # Check if inverse relation classification is enabled
     if hasattr(flags, 'is-inverse-relation-classify') and getattr(flags, 'is-inverse-relation-classify', False) and dataset_name:
+        print(f"🔍 [逆关系嵌入] 使用语义嵌入方式生成逆关系嵌入")
+        print(f"   - 数据集: {dataset_name}")
+        print(f"   - 关系类型分类: 已启用")
+        print(f"   - 将为非对称关系生成基于语义的逆关系嵌入")
         return order_embeddings_with_classification(embeddings, relation_names, graph, num_rels, dataset_name)
     else:
+        print(f"🔄 [逆关系嵌入] 使用直接翻转方式生成逆关系嵌入")
+        print(f"   - 数据集: {dataset_name if dataset_name else '未知'}")
+        print(f"   - 关系类型分类: 已禁用")
+        print(f"   - 所有逆关系将使用直接翻转 (-1 * 原关系)")
         # Original logic
         return order_embeddings_original(embeddings, relation_names, graph, num_rels, inv_embeddings)
 
 def order_embeddings_original(embeddings, relation_names, graph, num_rels, inv_embeddings = None):
     """Original embedding ordering logic."""
+    print(f"📝 [原始逻辑] 使用直接翻转方式处理 {len(embeddings)} 个关系")
+    print(f"   - 所有逆关系将使用: 逆关系 = -1 * 原关系")
+    print(f"   - 预计算逆关系嵌入: {'是' if inv_embeddings is not None else '否'}")
+    
     ordered_embeddings = {}
     for i in range(len(embeddings)):
         if(relation_names[i] in graph.edge2id):
@@ -815,6 +844,22 @@ def order_embeddings_with_classification(embeddings, relation_names, graph, num_
     """
     # Load relation types
     relation_types_dict = load_relation_types(dataset_name)
+    
+    # Count relation types for statistics
+    type_counts = {'Symmetric': 0, 'Antisymmetric': 0, 'Asymmetric': 0, 'Unknown': 0}
+    for relation_name in relation_names:
+        if relation_name in graph.edge2id:
+            relation_type = get_relation_type(relation_name, relation_types_dict)
+            if relation_type in type_counts:
+                type_counts[relation_type] += 1
+            else:
+                type_counts['Unknown'] += 1
+    
+    print(f"📊 [关系类型分布统计]")
+    print(f"   - 对称关系: {type_counts['Symmetric']} 个 (逆关系 = 原关系)")
+    print(f"   - 反对称关系: {type_counts['Antisymmetric']} 个 (逆关系 = -原关系)")
+    print(f"   - 非对称关系: {type_counts['Asymmetric']} 个 (逆关系 = 语义嵌入)")
+    print(f"   - 未知类型: {type_counts['Unknown']} 个 (默认为非对称)")
     
     # Generate inverse embeddings for asymmetric relations using semantic information
     asymmetric_inverse_embeddings = generate_inverse_embeddings_for_asymmetric(
@@ -943,6 +988,14 @@ def build_relation_graph_exp(graph, dataset_name=None):
                     # Store these relation graphs
                     graph.harder_head_rg1[(head, graph.target_edge_type[i].item())] = head_known_rel_graph
                     graph.harder_tail_rg1[(tail, graph.target_edge_type[i].item())] = tail_known_rel_graph
+    
+    # 确保dataset_name正确设置
+    if dataset_name is None and hasattr(graph, 'dataset'):
+        dataset_name = graph.dataset
+    elif dataset_name is None:
+        dataset_name = "Unknown"
+    
+    print(f"🔍 [调试信息] dataset_name: {dataset_name}")
     
     file_path = None
 
