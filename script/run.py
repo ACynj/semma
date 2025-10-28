@@ -17,6 +17,8 @@ from nltk.corpus import wordnet as wn
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from ultra import tasks, util, parse
 from ultra.models import Ultra
+from ultra.enhanced_models import EnhancedUltra
+from ultra.improved_enhanced_models import ImprovedEnhancedUltra
 
 separator = ">" * 30
 line = "-" * 30
@@ -287,6 +289,12 @@ if __name__ == "__main__":
             entity_model_cfg=cfg.model.entity_model,
             sem_model_cfg=cfg.model.semantic_model,
         )
+    elif(flags.run == "EnhancedUltra"):
+        model = EnhancedUltra(
+            rel_model_cfg=cfg.model.relation_model,
+            entity_model_cfg=cfg.model.entity_model,
+            sem_model_cfg=cfg.model.semantic_model,
+        )
     else:
         model = Ultra(
             rel_model_cfg=cfg.model.relation_model,
@@ -295,7 +303,28 @@ if __name__ == "__main__":
  
     if "checkpoint" in cfg and cfg.checkpoint is not None:
         state = torch.load(cfg.checkpoint, map_location="cpu")
-        model.load_state_dict(state["model"])
+        try:
+            model.load_state_dict(state["model"])
+        except RuntimeError as e:
+            if "Unexpected key(s)" in str(e):
+                logger.warning("Checkpoint contains unexpected keys, attempting partial loading...")
+                model_dict = model.state_dict()
+                checkpoint_dict = state["model"]
+                
+                # Filter out unexpected keys
+                filtered_dict = {k: v for k, v in checkpoint_dict.items() if k in model_dict}
+                missing_keys = set(model_dict.keys()) - set(filtered_dict.keys())
+                unexpected_keys = set(checkpoint_dict.keys()) - set(filtered_dict.keys())
+                
+                if unexpected_keys:
+                    logger.warning(f"Unexpected keys in checkpoint: {unexpected_keys}")
+                if missing_keys:
+                    logger.warning(f"Missing keys in checkpoint: {missing_keys}")
+                
+                model_dict.update(filtered_dict)
+                model.load_state_dict(model_dict)
+            else:
+                raise e
  
     model = model.to(device)
     

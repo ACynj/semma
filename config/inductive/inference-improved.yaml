@@ -1,11 +1,12 @@
-output_dir: output/ 
+output_dir: ./output/ 
 
 dataset:
   class: {{ dataset }}
-  root: kg-datasets/
+  root: ./kg-datasets/
+  version: {{ version }}
 
 model:
-  class: Ultra
+  class: Ultra  # 这个会被flags.yaml中的run参数覆盖
   relation_model:
     class: RelNBFNet
     input_dim: 64
@@ -32,8 +33,8 @@ model:
     layer_norm: yes
 
 task:
-  name: TransductiveInference
-  num_negative: 512
+  name: InductiveInference
+  num_negative: 256
   strict_negative: yes
   adversarial_temperature: 1
   metric: [mr, mrr, hits@1, hits@3, hits@10, hits@10_50]
@@ -48,5 +49,6 @@ train:
   num_epoch: {{ epochs }}
   log_interval: 100
   batch_per_epoch: {{ bpe }}
+  #logger: wandb
 
 checkpoint: {{ ckpt }}

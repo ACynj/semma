@@ -1,11 +1,12 @@
-output_dir: output/ 
+output_dir: ./output 
 
 dataset:
-  class: {{ dataset }}
-  root: kg-datasets/
+  class: JointDataset
+  graphs: [FB15k237, WN18RR, CoDExMedium]
+  root: ./kg-datasets/
 
 model:
-  class: Ultra
+  class: Ultra  # 使用标准Ultra类，实际模型由flags.yaml的run参数控制
   relation_model:
     class: RelNBFNet
     input_dim: 64
@@ -32,11 +33,11 @@ model:
     layer_norm: yes
 
 task:
-  name: TransductiveInference
+  name: MultiGraphPretraining
   num_negative: 512
   strict_negative: yes
   adversarial_temperature: 1
-  metric: [mr, mrr, hits@1, hits@3, hits@10, hits@10_50]
+  metric: [mr, mrr, hits@1, hits@3, hits@10]
 
 optimizer:
   class: AdamW
@@ -45,8 +46,8 @@ optimizer:
 train:
   gpus: {{ gpus }}
   batch_size: 64
-  num_epoch: {{ epochs }}
-  log_interval: 100
-  batch_per_epoch: {{ bpe }}
-
-checkpoint: {{ ckpt }}
+  num_epoch: 10
+  log_interval: 800
+  batch_per_epoch: 80000
+  fast_test: 500
+  #logger: wandb

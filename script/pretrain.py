@@ -269,12 +269,25 @@ if __name__ == "__main__":
     valid_data = [vd.to(device) for vd in valid_data]
     test_data = [tst.to(device) for tst in test_data]
 
-    if(flags.run == "semma"):
+    # 根据flags.yaml中的run参数选择模型类型
+    print(f"🔧 模型选择: flags.run = {flags.run}")
+    
+    if flags.run == "EnhancedUltra":
+        # 导入EnhancedUltra模型
+        from ultra.enhanced_models import EnhancedUltra
+        model = EnhancedUltra(
+            rel_model_cfg=cfg.model.relation_model,
+            entity_model_cfg=cfg.model.entity_model,
+            sem_model_cfg=cfg.model.semantic_model,
+        )
+        print(f"✅ 成功加载EnhancedUltra模型")
+    elif flags.run == "semma":
         model = Ultra(
             rel_model_cfg=cfg.model.relation_model,
             entity_model_cfg=cfg.model.entity_model,
             sem_model_cfg=cfg.model.semantic_model,
         )
+        print(f"✅ 使用标准Ultra模型 (semma模式)")
     else:
         model = Ultra(
             rel_model_cfg=cfg.model.relation_model,

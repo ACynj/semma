@@ -90,7 +90,7 @@ def generate_inverse_embeddings_for_asymmetric(relation_names, dataset_name, mod
     Returns:
         torch.Tensor: Embeddings for inverse relations
     """
-    device = torch.device(f"cuda:{flags.gpus}" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{flags.gpus[0]}" if torch.cuda.is_available() else "cpu")
     
     print(f"🧠 [语义嵌入生成] 为非对称关系生成逆关系嵌入")
     print(f"   - 嵌入模型: {model_embed}")
@@ -275,7 +275,7 @@ def compute_ranking(pred, target, mask=None):
 
 def get_relation_embeddings(relation_names, model_embed = None):
     
-    device = torch.device(f"cuda:{flags.gpus}" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{flags.gpus[0]}" if torch.cuda.is_available() else "cpu")
 
     if(model_embed == "sentbert"):
         # Load pre-trained language model from local path and ensure it's on the specified device
@@ -827,7 +827,7 @@ def build_relation_graph_exp(graph, dataset_name=None):
     # Step 4: Add fifth edge type for semantically similar relations
     # Generate embeddings for relation names based on the edge2id dictionary keys
 
-    if(flags.run == "semma"):
+    if(flags.run == "semma" or flags.run == "EnhancedUltra"):
         rel_graph = Data(
             edge_index=torch.cat([hh_edges[:, [0, 1]].T, tt_edges[:, [0, 1]].T, ht_edges[:, [0, 1]].T, th_edges[:, [0, 1]].T], dim=1), 
             edge_type=torch.cat([hh_edges[:, 2], tt_edges[:, 2], ht_edges[:, 2], th_edges[:, 2]], dim=0),
