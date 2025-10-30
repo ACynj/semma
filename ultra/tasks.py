@@ -78,9 +78,10 @@ def get_inverse_relation_semantics(dataset_name, relation_name):
     
     return inverse_name, inverse_desc
 
-def generate_inverse_embeddings_for_asymmetric(relation_names, dataset_name, model_embed="jinaai"):
+def generate_inverse_embeddings_with_semantics(relation_names, dataset_name, model_embed="jinaai"):
     """
-    Generate embeddings for inverse relations of asymmetric relations using semantic information.
+    Generate embeddings for inverse relations using semantic information (cleaned names + descriptions).
+    This applies to ALL relation types: Symmetric, Antisymmetric, and Asymmetric.
     
     Args:
         relation_names (list): List of relation names
@@ -92,48 +93,40 @@ def generate_inverse_embeddings_for_asymmetric(relation_names, dataset_name, mod
     """
     device = torch.device(f"cuda:{flags.gpus[0]}" if torch.cuda.is_available() else "cpu")
     
-    print(f"🧠 [语义嵌入生成] 为非对称关系生成逆关系嵌入")
+    print(f"🧠 [语义嵌入生成] 为所有关系生成逆关系嵌入（基于清洁名称+描述）")
     print(f"   - 嵌入模型: {model_embed}")
     print(f"   - 设备: {device}")
-    
-    # Load relation types
-    relation_types_dict = load_relation_types(dataset_name)
-    
-    # Count asymmetric relations
-    asymmetric_count = 0
-    for relation_name in relation_names:
-        relation_type = get_relation_type(relation_name, relation_types_dict)
-        if relation_type == 'Asymmetric':
-            asymmetric_count += 1
-    
-    print(f"   - 发现 {asymmetric_count} 个非对称关系需要语义嵌入")
     print(f"   - 总关系数: {len(relation_names)}")
+    print(f"   - 策略: 不区分关系类型，统一使用语义嵌入")
     
-    # Prepare semantic information for asymmetric relations
+    # Prepare semantic information for all relations
     inverse_semantic_texts = []
+    successful_count = 0
+    fallback_count = 0
     
     for relation_name in relation_names:
-        relation_type = get_relation_type(relation_name, relation_types_dict)
+        # Get inverse relation semantics for ALL relations
+        inverse_name, inverse_desc = get_inverse_relation_semantics(dataset_name, relation_name)
         
-        if relation_type == 'Asymmetric':
-            # Get inverse relation semantics
-            inverse_name, inverse_desc = get_inverse_relation_semantics(dataset_name, relation_name)
-            
-            # Combine name and description for embedding
-            if inverse_name and inverse_desc:
-                semantic_text = f"{inverse_name}: {inverse_desc}"
-            elif inverse_name:
-                semantic_text = inverse_name
-            elif inverse_desc:
-                semantic_text = inverse_desc
-            else:
-                # Fallback to original relation name if no inverse semantics available
-                semantic_text = relation_name
+        # Combine name and description for embedding
+        if inverse_name and inverse_desc:
+            semantic_text = f"{inverse_name}: {inverse_desc}"
+            successful_count += 1
+        elif inverse_name:
+            semantic_text = inverse_name
+            successful_count += 1
+        elif inverse_desc:
+            semantic_text = inverse_desc
+            successful_count += 1
         else:
-            # For symmetric and antisymmetric relations, use original relation name
+            # Fallback to original relation name if no inverse semantics available
             semantic_text = relation_name
+            fallback_count += 1
         
         inverse_semantic_texts.append(semantic_text)
+    
+    print(f"   - 成功获取语义信息: {successful_count} 个")
+    print(f"   - 使用回退策略: {fallback_count} 个")
     
     # Generate embeddings using the same model as original relations
     embeddings = get_relation_embeddings(inverse_semantic_texts, model_embed)
@@ -662,10 +655,10 @@ def order_embeddings(embeddings, relation_names, graph, num_rels, inv_embeddings
     """
     # Check if inverse relation classification is enabled
     if hasattr(flags, 'is-inverse-relation-classify') and getattr(flags, 'is-inverse-relation-classify', False) and dataset_name:
-        print(f"🔍 [逆关系嵌入] 使用语义嵌入方式生成逆关系嵌入")
+        print(f"🔍 [逆关系嵌入] 使用统一语义嵌入方式生成逆关系嵌入")
         print(f"   - 数据集: {dataset_name}")
-        print(f"   - 关系类型分类: 已启用")
-        print(f"   - 将为非对称关系生成基于语义的逆关系嵌入")
+        print(f"   - 策略: 统一语义嵌入（基于清洁名称+描述）")
+        print(f"   - 说明: 所有关系类型（对称/反对称/非对称）的逆关系均使用语义嵌入")
         return order_embeddings_with_classification(embeddings, relation_names, graph, num_rels, dataset_name)
     else:
         print(f"🔄 [逆关系嵌入] 使用直接翻转方式生成逆关系嵌入")
@@ -708,14 +701,13 @@ def order_embeddings_original(embeddings, relation_names, graph, num_rels, inv_e
 
 def order_embeddings_with_classification(embeddings, relation_names, graph, num_rels, dataset_name):
     """
-    Order embeddings based on relation type classification.
+    Order embeddings using semantic-based inverse relation embeddings for ALL relation types.
     
     Strategy:
-    - Symmetric relations: inverse embedding = original embedding
-    - Antisymmetric relations: inverse embedding = -original embedding  
-    - Asymmetric relations: inverse embedding = semantic-based embedding
+    - ALL relations: inverse embedding = semantic-based embedding (cleaned name + description)
+    - No distinction between Symmetric, Antisymmetric, and Asymmetric relations
     """
-    # Load relation types
+    # Load relation types for statistics only
     relation_types_dict = load_relation_types(dataset_name)
     
     # Count relation types for statistics
@@ -729,13 +721,14 @@ def order_embeddings_with_classification(embeddings, relation_names, graph, num_
                 type_counts['Unknown'] += 1
     
     print(f"📊 [关系类型分布统计]")
-    print(f"   - 对称关系: {type_counts['Symmetric']} 个 (逆关系 = 原关系)")
-    print(f"   - 反对称关系: {type_counts['Antisymmetric']} 个 (逆关系 = -原关系)")
-    print(f"   - 非对称关系: {type_counts['Asymmetric']} 个 (逆关系 = 语义嵌入)")
-    print(f"   - 未知类型: {type_counts['Unknown']} 个 (默认为非对称)")
+    print(f"   - 对称关系: {type_counts['Symmetric']} 个")
+    print(f"   - 反对称关系: {type_counts['Antisymmetric']} 个")
+    print(f"   - 非对称关系: {type_counts['Asymmetric']} 个")
+    print(f"   - 未知类型: {type_counts['Unknown']} 个")
+    print(f"   ⚠️  注意: 所有关系的逆关系嵌入均使用语义嵌入（清洁名称+描述）")
     
-    # Generate inverse embeddings for asymmetric relations using semantic information
-    asymmetric_inverse_embeddings = generate_inverse_embeddings_for_asymmetric(
+    # Generate inverse embeddings for ALL relations using semantic information
+    all_inverse_embeddings = generate_inverse_embeddings_with_semantics(
         relation_names, dataset_name, flags.model_embed
     )
     
@@ -743,21 +736,12 @@ def order_embeddings_with_classification(embeddings, relation_names, graph, num_
     for i in range(len(embeddings)):
         if(relation_names[i] in graph.edge2id):
             relation_name = relation_names[i]
-            relation_type = get_relation_type(relation_name, relation_types_dict)
             
             # Store original embedding
             ordered_embeddings[graph.edge2id[relation_name]] = embeddings[i]
             
-            # Generate inverse embedding based on relation type
-            if relation_type == 'Symmetric':
-                # Symmetric: inverse embedding = original embedding
-                inverse_embedding = embeddings[i]
-            elif relation_type == 'Antisymmetric':
-                # Antisymmetric: inverse embedding = -original embedding
-                inverse_embedding = -embeddings[i]
-            else:  # Asymmetric
-                # Asymmetric: use semantic-based embedding
-                inverse_embedding = asymmetric_inverse_embeddings[i]
+            # Use semantic-based embedding for ALL relation types
+            inverse_embedding = all_inverse_embeddings[i]
             
             ordered_embeddings[graph.edge2id[relation_name] + len(graph.edge2id)] = inverse_embedding
 

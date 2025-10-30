@@ -1,17 +1,4 @@
 {
-    "relations_type": {
-        "_also_see": "Symmetric",
-        "_derivationally_related_form": "Symmetric",
-        "_has_part": "Asymmetric",
-        "_hypernym": "Asymmetric",
-        "_instance_hypernym": "Asymmetric",
-        "_member_meronym": "Asymmetric",
-        "_member_of_domain_region": "Asymmetric",
-        "_member_of_domain_usage": "Asymmetric",
-        "_similar_to": "Symmetric",
-        "_synset_domain_topic_of": "Asymmetric",
-        "_verb_group": "Symmetric"
-    },
     "Examples": [
 		["write.v.01","_also_see","write_out.v.01"],
 		["cover.v.01","_derivationally_related_form","binding.n.05"],
@@ -26,29 +13,29 @@
 		["cover.v.01","_verb_group","overlay.v.01"]
 	],
     "cleaned_inverse_relations": {
-        "_also_see": "",
-        "_derivationally_related_form": "",
+        "_also_see": "also see",
+        "_derivationally_related_form": "derivationally related to",
         "_has_part": "part of",
-        "_hypernym": "hyponym",
-        "_instance_hypernym": "instance of",
-        "_member_meronym": "member of",
-        "_member_of_domain_region": "domain region of",
-        "_member_of_domain_usage": "domain usage of",
-        "_similar_to": "",
-        "_synset_domain_topic_of": "domain topic",
-        "_verb_group": ""
+        "_hypernym": "hyponym of",
+        "_instance_hypernym": "has instance",
+        "_member_meronym": "has member",
+        "_member_of_domain_region": "domain region for",
+        "_member_of_domain_usage": "domain usage for",
+        "_similar_to": "similar to",
+        "_synset_domain_topic_of": "topic domain for",
+        "_verb_group": "verb group with"
     },
     "inverse_relations_descriptions": {
-        "_also_see": "",
-        "_derivationally_related_form": "",
-        "_has_part": "component relationship",
-        "_hypernym": "semantic hierarchy",
-        "_instance_hypernym": "categorical membership",
-        "_member_meronym": "collective membership",
-        "_member_of_domain_region": "geographic domain",
-        "_member_of_domain_usage": "usage domain",
-        "_similar_to": "",
-        "_synset_domain_topic_of": "subject classification",
-        "_verb_group": ""
+        "_also_see": "bidirectional reference",
+        "_derivationally_related_form": "lexical derivation link",
+        "_has_part": "contains a component",
+        "_hypernym": "more specific term",
+        "_instance_hypernym": "includes specific instance",
+        "_member_meronym": "collection includes member",
+        "_member_of_domain_region": "applies within region",
+        "_member_of_domain_usage": "usage context domain",
+        "_similar_to": "mutual similarity link",
+        "_synset_domain_topic_of": "categorizes by topic",
+        "_verb_group": "shares verb group"
     }
 }
