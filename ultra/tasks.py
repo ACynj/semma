@@ -281,7 +281,7 @@ def get_relation_embeddings(relation_names, model_embed = None):
         # Load pre-trained language model from local path and ensure it's on the specified device
         # Note: You may need to download all-mpnet-base-v2 model locally first
         # For now, using jina-embeddings-v3 as fallback since it's available locally
-        cache_dir = r'/T20030104/ynj/ULTRA/models/jina-embeddings-v3'
+        cache_dir = r'/T20030104/ynj/semma/models/all-mpnet-base-v2'
         model = AutoModel.from_pretrained(cache_dir, trust_remote_code=True, torch_dtype=torch.float32, local_files_only=True)
         model.to(device)
         # Use jina model for sentence transformer functionality
@@ -298,7 +298,7 @@ def get_relation_embeddings(relation_names, model_embed = None):
 
     else: # Assuming jinaai or other models
         # Use local model path instead of downloading from huggingface
-        cache_dir = r'/T20030104/ynj/ULTRA/models/jina-embeddings-v3'
+        cache_dir = r'/T20030104/ynj/semma/models/jina-embeddings-v3'
         model = AutoModel.from_pretrained(cache_dir, trust_remote_code=True, torch_dtype=torch.float32, local_files_only=True)
         model.to(device)
         # model.encode for jinaai typically returns numpy arrays
