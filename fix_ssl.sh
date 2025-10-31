@@ -17,4 +17,7 @@ echo "   - PYTHONWARNINGS=ignore:Unverified HTTPS request"
 
 echo ""
 echo "🚀 现在可以运行您的命令了:"
-echo "python script/run.py -c config/inductive/inference.yaml --dataset WN18RRInductive --version v1 --ckpt /T20030104/ynj/semma/ckpts/semma.pth --gpus [0] --bpe null --epochs 0"
+# Get checkpoint path from flags.yaml
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CKPT_PATH=$(python3 -c "import yaml, os; config = yaml.safe_load(open(os.path.join('$SCRIPT_DIR', 'flags.yaml'))); print(os.path.join(config['ckpt_path'], 'semma.pth'))")
+echo "python script/run.py -c config/inductive/inference.yaml --dataset WN18RRInductive --version v1 --ckpt $CKPT_PATH --gpus [0] --bpe null --epochs 0"

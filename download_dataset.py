@@ -9,6 +9,11 @@ import ssl
 import urllib.request
 import requests
 from urllib.error import URLError
+from ultra import parse
+
+# Load flags configuration
+mydir = os.getcwd()
+flags = parse.load_flags(os.path.join(mydir, "flags.yaml"))
 
 def download_file_with_retry(url, filepath, max_retries=3):
     """使用多种方法下载文件"""
@@ -105,7 +110,7 @@ def download_wn18rr_inductive():
     ]
     
     # 文件路径
-    base_dir = "/T20030104/ynj/semma/kg-datasets/grail/IndWN18RR/v1/raw"
+    base_dir = os.path.join(flags.kg_datasets_path, "grail/IndWN18RR/v1/raw")
     filenames = [
         "train_ind.txt", "valid_ind.txt", "test_ind.txt", "train.txt", "valid.txt"
     ]
@@ -128,7 +133,8 @@ def download_wn18rr_inductive():
     if success_count == total_count:
         print("🎉 所有文件下载成功!")
         print("现在可以运行您的训练命令了:")
-        print("python script/run.py -c config/inductive/inference.yaml --dataset WN18RRInductive --version v1 --ckpt /T20030104/ynj/semma/ckpts/semma.pth --gpus [0] --bpe null --epochs 0")
+        ckpt_path = os.path.join(flags.ckpt_path, "semma.pth")
+        print(f"python script/run.py -c config/inductive/inference.yaml --dataset WN18RRInductive --version v1 --ckpt {ckpt_path} --gpus [0] --bpe null --epochs 0")
     else:
         print("❌ 部分文件下载失败，请检查网络连接或手动下载")
     

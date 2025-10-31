@@ -1314,48 +1314,123 @@ class TransductiveDataset(InMemoryDataset):
         from urllib.error import URLError
         
         for url, path in zip(self.urls, self.raw_paths):
-            max_retries = 3
-            retry_delay = 2
+            # Check if file already exists
+            if os.path.exists(path):
+                print(f"✓ File {os.path.basename(path)} already exists, skipping download.")
+                continue
             
+            max_retries = 3
+            retry_delay = 5  # Increased delay
+            
+            # Try requests first (more reliable)
+            success = False
             for attempt in range(max_retries):
                 try:
-                    print(f"Downloading {os.path.basename(path)} (attempt {attempt + 1}/{max_retries})...")
-                    download_path = download_url(url, self.raw_dir)
-                    os.rename(download_path, path)
+                    print(f"Downloading {os.path.basename(path)} using requests (attempt {attempt + 1}/{max_retries})...")
+                    self._download_with_requests(url, path)
                     print(f"Successfully downloaded {os.path.basename(path)}")
+                    success = True
                     break
-                except URLError as e:
-                    print(f"Download attempt {attempt + 1} failed: {e}")
+                except Exception as e:
+                    print(f"Requests download attempt {attempt + 1} failed: {e}")
                     if attempt < max_retries - 1:
                         print(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                    else:
-                        print(f"Failed to download {os.path.basename(path)} after {max_retries} attempts")
-                        # Try alternative download method
-                        try:
-                            print(f"Trying alternative download method for {os.path.basename(path)}...")
-                            self._download_with_requests(url, path)
-                        except Exception as e2:
-                            print(f"Alternative download also failed: {e2}")
-                            raise e
-                except Exception as e:
-                    print(f"Unexpected error downloading {os.path.basename(path)}: {e}")
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
                         retry_delay *= 2
                     else:
-                        raise e
+                        print(f"Requests failed, trying torch_geometric download_url...")
+            
+            # Fallback to torch_geometric download_url
+            if not success:
+                for attempt in range(max_retries):
+                    try:
+                        print(f"Downloading {os.path.basename(path)} using download_url (attempt {attempt + 1}/{max_retries})...")
+                        download_path = download_url(url, self.raw_dir)
+                        os.rename(download_path, path)
+                        print(f"Successfully downloaded {os.path.basename(path)}")
+                        success = True
+                        break
+                    except URLError as e:
+                        print(f"Download_url attempt {attempt + 1} failed: {e}")
+                        if attempt < max_retries - 1:
+                            print(f"Retrying in {retry_delay} seconds...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
+                        else:
+                            try:
+                                print(f"Trying urllib with custom SSL...")
+                                self._download_with_urllib_ssl(url, path)
+                                success = True
+                                break
+                            except Exception as e2:
+                                pass  # Will show error message below
+                    except Exception as e:
+                        print(f"Unexpected error: {e}")
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
+            
+            if not success:
+                filename = os.path.basename(path)
+                print(f"\n{'='*80}")
+                print(f"❌ Failed to download {filename}")
+                print(f"{'='*80}")
+                print(f"Possible solutions:")
+                print(f"1. Check network connection and firewall settings")
+                print(f"2. Manually download:")
+                print(f"   URL: {url}")
+                print(f"   Save to: {path}")
+                print(f"3. If using proxy, set environment variables:")
+                print(f"   export http_proxy=http://proxy:port")
+                print(f"   export https_proxy=http://proxy:port")
+                print(f"4. Or skip download if files already exist")
+                print(f"{'='*80}\n")
+                raise RuntimeError(f"Failed to download {filename}. Network connection issue detected.")
 
     def _download_with_requests(self, url: str, file_path: str) -> None:
-        """Alternative download method using requests library"""
+        """Download method using requests library with better error handling"""
+        import requests
+        import os
+        
+        # Get timeout from environment or use longer defaults
+        connect_timeout = int(os.environ.get('DOWNLOAD_CONNECT_TIMEOUT', '60'))
+        read_timeout = int(os.environ.get('DOWNLOAD_READ_TIMEOUT', '120'))
+        
+        # Check for proxy settings
+        proxies = None
+        if 'http_proxy' in os.environ or 'https_proxy' in os.environ:
+            proxies = {
+                'http': os.environ.get('http_proxy'),
+                'https': os.environ.get('https_proxy', os.environ.get('http_proxy'))
+            }
+            print(f"Using proxy: {proxies['https']}")
+        
+        print(f"Downloading {os.path.basename(file_path)} using requests...")
+        print(f"Timeout: connect={connect_timeout}s, read={read_timeout}s")
+        
         try:
-            import requests
-            import os
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
             
-            print(f"Downloading {os.path.basename(file_path)} using requests...")
-            response = requests.get(url, timeout=30, stream=True)
+            # Disable SSL verification if requested
+            verify_ssl = os.environ.get('SSL_VERIFY', 'True').lower() != 'false'
+            if not verify_ssl:
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            response = session.get(
+                url, 
+                timeout=(connect_timeout, read_timeout), 
+                stream=True, 
+                verify=verify_ssl,
+                proxies=proxies
+            )
             response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
             
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             
@@ -1363,14 +1438,22 @@ class TransductiveDataset(InMemoryDataset):
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = (downloaded / total_size) * 100
+                            print(f"\rProgress: {percent:.1f}% ({downloaded}/{total_size} bytes)", end='', flush=True)
             
-            print(f"Successfully downloaded {os.path.basename(file_path)} using requests")
+            print(f"\n✓ Successfully downloaded {os.path.basename(file_path)}")
             
         except ImportError:
             print("requests library not available, trying urllib with custom SSL context...")
             self._download_with_urllib_ssl(url, file_path)
+        except requests.exceptions.Timeout as e:
+            raise RuntimeError(f"Connection timeout after {connect_timeout}s. Try: export DOWNLOAD_CONNECT_TIMEOUT=120")
+        except requests.exceptions.ConnectionError as e:
+            raise RuntimeError(f"Connection failed: {e}. Check network/firewall or use proxy.")
         except Exception as e:
-            print(f"requests download failed: {e}")
+            print(f"requests download failed: {e}, trying urllib...")
             self._download_with_urllib_ssl(url, file_path)
     
     def _download_with_urllib_ssl(self, url: str, file_path: str) -> None:

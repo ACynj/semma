@@ -17,3 +17,9 @@ use_kg_icl_in_training: False # [True, False], if True, also use KG-ICL during t
 prompt_num_examples: 2 # number of example triples to use in prompt graph (reduced from 3 to save memory)
 prompt_max_hops: 1 # maximum hops for neighbor expansion in prompt graph (reduced from 2 to save memory)
 prompt_num_layers: 1 # number of layers in prompt encoder (reduced from 2 to save memory)
+# Base paths configuration
+base_path: /T20030104/ynj/semma # Base directory path for the project
+ckpt_path: /T20030104/ynj/semma/ckpts # Checkpoint directory path
+models_path: /T20030104/ynj/semma/models # Models directory path
+kg_datasets_path: /T20030104/ynj/semma/kg-datasets # Knowledge graph datasets directory path
+openrouter_path: /T20030104/ynj/semma/openrouter # OpenRouter data directory path
