@@ -26,7 +26,7 @@ def load_relation_types(dataset_name):
     Returns:
         dict: Dictionary mapping relation names to their types ('Symmetric', 'Asymmetric', 'Antisymmetric')
     """
-    json_path = f"/T20030104/ynj/semma/openrouter/relations_type/gpt-4o-2024-11-20/{dataset_name}.json"
+    json_path = os.path.join(flags.openrouter_path, "relations_type/gpt-4o-2024-11-20", f"{dataset_name}.json")
     
     if not os.path.exists(json_path):
         print(f"Warning: Relation types file not found at {json_path}")
@@ -61,7 +61,7 @@ def get_inverse_relation_semantics(dataset_name, relation_name):
     Returns:
         tuple: (inverse_relation_name, inverse_relation_description)
     """
-    json_path = f"/T20030104/ynj/semma/openrouter/relations_type/gpt-4o-2024-11-20/{dataset_name}.json"
+    json_path = os.path.join(flags.openrouter_path, "relations_type/gpt-4o-2024-11-20", f"{dataset_name}.json")
     
     if not os.path.exists(json_path):
         print(f"Warning: Relation types file not found at {json_path}")
@@ -274,7 +274,7 @@ def get_relation_embeddings(relation_names, model_embed = None):
         # Load pre-trained language model from local path and ensure it's on the specified device
         # Note: You may need to download all-mpnet-base-v2 model locally first
         # For now, using jina-embeddings-v3 as fallback since it's available locally
-        cache_dir = r'/T20030104/ynj/semma/models/all-mpnet-base-v2'
+        cache_dir = os.path.join(flags.models_path, "all-mpnet-base-v2")
         model = AutoModel.from_pretrained(cache_dir, trust_remote_code=True, torch_dtype=torch.float32, local_files_only=True)
         model.to(device)
         # Use jina model for sentence transformer functionality
@@ -291,7 +291,7 @@ def get_relation_embeddings(relation_names, model_embed = None):
 
     else: # Assuming jinaai or other models
         # Use local model path instead of downloading from huggingface
-        cache_dir = r'/T20030104/ynj/semma/models/jina-embeddings-v3'
+        cache_dir = os.path.join(flags.models_path, "jina-embeddings-v3")
         model = AutoModel.from_pretrained(cache_dir, trust_remote_code=True, torch_dtype=torch.float32, local_files_only=True)
         model.to(device)
         # model.encode for jinaai typically returns numpy arrays
@@ -857,11 +857,11 @@ def build_relation_graph_exp(graph, dataset_name=None):
     file_path = None
 
     if flags.LLM == "gpt4o":
-        file_path = os.path.join(mydir, "openrouter/descriptions/gpt-4o-2024-11-20", dataset_name + ".json")
+        file_path = os.path.join(flags.openrouter_path, "descriptions/gpt-4o-2024-11-20", dataset_name + ".json")
     elif flags.LLM == "qwen3-32b":
-        file_path = os.path.join(mydir, "openrouter/descriptions/qwen3-32b", dataset_name + ".json")
+        file_path = os.path.join(flags.openrouter_path, "descriptions/qwen3-32b", dataset_name + ".json")
     elif flags.LLM == "deepseekv3":
-        file_path = os.path.join(mydir, "openrouter/descriptions/deepseek-chat-v3-0324", dataset_name + ".json")
+        file_path = os.path.join(flags.openrouter_path, "descriptions/deepseek-chat-v3-0324", dataset_name + ".json")
 
     if file_path is not None:
         dict = load_file(file_path)
