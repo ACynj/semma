@@ -1,37 +1,4 @@
 {
-    "relations_type": {
-        "_hypernym": "Antisymmetric",
-        "_derivationally_related_form": "Symmetric",
-        "_also_see": "Symmetric",
-        "_synset_domain_topic_of": "Asymmetric",
-        "_has_part": "Antisymmetric",
-        "_verb_group": "Symmetric",
-        "_member_meronym": "Antisymmetric",
-        "_similar_to": "Symmetric",
-        "_instance_hypernym": "Antisymmetric"
-    },
-    "cleaned_inverse_relations": {
-        "_hypernym": "hyponym",
-        "_derivationally_related_form": "",
-        "_also_see": "",
-        "_synset_domain_topic_of": "domain_topic_of",
-        "_has_part": "part_of",
-        "_verb_group": "",
-        "_member_meronym": "member_holonym",
-        "_similar_to": "",
-        "_instance_hypernym": "instance_hyponym"
-    },
-    "inverse_relations_descriptions": {
-        "_hypernym": "specific concept relation",
-        "_derivationally_related_form": "",
-        "_also_see": "",
-        "_synset_domain_topic_of": "topic domain relation",
-        "_has_part": "component inclusion relation",
-        "_verb_group": "",
-        "_member_meronym": "group inclusion relation",
-        "_similar_to": "",
-        "_instance_hypernym": "instance subtype relation"
-    },
     "Examples": [
         [
             "two.n.01",
@@ -78,5 +45,27 @@
             "_instance_hypernym",
             "beginning.n.05"
         ]
-    ]
+    ],
+    "cleaned_inverse_relations": {
+        "_hypernym": "hyponym",
+        "_derivationally_related_form": "derivationally_related_form",
+        "_also_see": "also_see",
+        "_synset_domain_topic_of": "domain_topic",
+        "_has_part": "part_of",
+        "_verb_group": "verb_group",
+        "_member_meronym": "member_holonym",
+        "_similar_to": "similar_to",
+        "_instance_hypernym": "instance_hyponym"
+    },
+    "inverse_relations_descriptions": {
+        "_hypernym": "is more specific term",
+        "_derivationally_related_form": "shares word derivation",
+        "_also_see": "semantically related concept",
+        "_synset_domain_topic_of": "belongs to subject area",
+        "_has_part": "component of entity",
+        "_verb_group": "shares action meaning",
+        "_member_meronym": "collection containing member",
+        "_similar_to": "has comparable meaning",
+        "_instance_hypernym": "specific instance of class"
+    }
 }

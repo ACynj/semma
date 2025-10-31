@@ -1,681 +1,401 @@
-{
-    "cleaned_relations": {
-        "cast member": "Cast Member",
-        "country of citizenship": "Country of Citizenship",
-        "participant in": "Participant In",
-        "educated at": "Educated At",
-        "country of origin": "Country of Origin",
-        "sibling": "Sibling",
-        "influenced by": "Influenced By",
-        "father": "Father",
-        "director": "Director",
-        "record label": "Record Label",
-        "given name": "Given Name",
-        "has part(s)": "Has Part(s)",
-        "family name": "Family Name",
-        "spouse": "Spouse",
-        "lyricist": "Lyricist",
-        "has works in the collection": "Has Works in Collection",
-        "composer": "Composer",
-        "place of birth": "Place of Birth",
-        "student of": "Student Of",
-        "award received": "Award Received",
-        "performer": "Performer",
-        "winner": "Winner",
-        "unmarried partner": "Unmarried Partner",
-        "nominated for": "Nominated For",
-        "participant": "Participant",
-        "diplomatic relation": "Diplomatic Relation",
-        "employer": "Employer",
-        "screenwriter": "Screenwriter",
-        "time period": "Time Period",
-        "on focus list of Wikimedia project": "On Focus List of Wikimedia Project",
-        "partner in business or sport": "Partner in Business or Sport",
-        "voice actor": "Voice Actor",
-        "different from": "Different From",
-        "place of burial": "Place of Burial",
-        "child": "Child",
-        "part of": "Part Of",
-        "shares border with": "Shares Border With",
-        "mother": "Mother",
-        "follows": "Follows",
-        "residence": "Residence",
-        "producer": "Producer",
-        "notable work": "Notable Work",
-        "country": "Country",
-        "place of death": "Place of Death",
-        "relative": "Relative",
-        "narrative location": "Narrative Location",
-        "student": "Student",
-        "described by source": "Described by Source",
-        "twinned administrative body": "Twinned Administrative Body",
-        "costume designer": "Costume Designer",
-        "member of": "Member Of",
-        "owned by": "Owned By",
-        "cause of death": "Cause of Death",
-        "ethnic group": "Ethnic Group",
-        "based on": "Based On",
-        "next lower rank": "Next Lower Rank",
-        "named after": "Named After",
-        "location of formation": "Location of Formation",
-        "filming location": "Filming Location",
-        "storyboard artist": "Storyboard Artist",
-        "second family name in Spanish name": "Second Family Name in Spanish",
-        "owner of": "Owner Of",
-        "significant event": "Significant Event",
-        "followed by": "Followed By",
-        "contributor to the creative work or subject": "Contributor to Creative Work",
-        "executive producer": "Executive Producer",
-        "godparent": "Godparent",
-        "film editor": "Film Editor",
-        "country for sport": "Country for Sport",
-        "Wikidata property example": "Wikidata Property Example",
-        "work location": "Work Location",
-        "said to be the same as": "Said to Be the Same As",
-        "competition won": "Competition Won",
-        "collection": "Collection",
-        "copyright representative": "Copyright Representative",
-        "supported sports team": "Supported Sports Team",
-        "capital": "Capital",
-        "replaces": "Replaces",
-        "family": "Family",
-        "creator": "Creator",
-        "enemy": "Enemy",
-        "characters": "Characters",
-        "family name identical to this given name": "Family Name Identical to Given Name",
-        "distributed by": "Distributed By",
-        "headquarters location": "Headquarters Location",
-        "director of photography": "Director of Photography",
-        "founded by": "Founded By",
-        "affiliation": "Affiliation",
-        "inspired by": "Inspired By",
-        "chief executive officer": "Chief Executive Officer",
-        "present in work": "Present in Work",
-        "organizer": "Organizer",
-        "signatory": "Signatory",
-        "member of sports team": "Member of Sports Team",
-        "allegiance": "Allegiance",
-        "dedicated to": "Dedicated To",
-        "located in the administrative territorial entity": "Located in Administrative Entity",
-        "soundtrack release": "Soundtrack Release",
-        "after a work by": "After a Work By",
-        "parent organization": "Parent Organization",
-        "replaced by": "Replaced By",
-        "main subject": "Main Subject",
-        "practiced by": "Practiced By",
-        "presenter": "Presenter",
-        "stepparent": "Stepparent",
-        "next higher rank": "Next Higher Rank",
-        "chairperson": "Chairperson",
-        "filmography": "Filmography",
-        "narrator": "Narrator",
-        "eye color": "Eye Color",
-        "contains the administrative territorial entity": "Contains Administrative Entity",
-        "animator": "Animator",
-        "given name version for other gender": "Given Name Version for Other Gender",
-        "capital of": "Capital Of",
-        "enclave within": "Enclave Within",
-        "location": "Location",
-        "adapted by": "Adapted By",
-        "occupant": "Occupant",
-        "author": "Author",
-        "conflict": "Conflict",
-        "dramaturge": "Dramaturge",
-        "has spin-off": "Has Spin-Off",
-        "has subsidiary": "Has Subsidiary",
-        "place of publication": "Place of Publication",
-        "board member": "Board Member",
-        "commemorates": "Commemorates",
-        "musical conductor": "Musical Conductor",
-        "production company": "Production Company",
-        "member of political party": "Member of Political Party",
-        "coach of sports team": "Coach of Sports Team",
-        "part of the series": "Part of the Series",
-        "scenographer": "Scenographer",
-        "director / manager": "Director / Manager",
-        "archives at": "Archives At",
-        "significant person": "Significant Person"
+{   
+    "Examples": [
+		["The Substitute","cast member","Naya Rivera"],
+		["James Bay","country of citizenship","United Kingdom"],
+		["Silvía Night","participant in","Eurovision Song Contest 2006"],
+		["Philippe Katerine","educated at","University of Rennes 2 – Upper Brittany"],
+		["No English label found","country of origin","Argentina"],
+		["Usha Mangeshkar","sibling","Asha Bhosle"],
+		["Charli XCX","influenced by","Björk"],
+		["David Cassidy","father","Jack Cassidy"],
+		["The Preacher's Wife","director","Penny Marshall"],
+		["Yukiko Iwai","record label","Pony Canyon"],
+		["Judith Malafronte","given name","Judith"],
+		["NCT","has part(s)","Jaehyun"],
+		["Kerry Butler","family name","Butler"],
+		["Lolita Milyavskaya","spouse","Alexander Tsekalo"],
+		["Blue Bayou","lyricist","Roy Orbison"],
+		["Roger Waters","has works in the collection","Museum of Modern Art"],
+		["Uptown Girl","composer","Billy Joel"],
+		["Jacek Kaczmarski","place of birth","Warsaw"],
+		["David Daniels","student of","George Shirley"],
+		["Lidiya Lobanova","award received","Order of the Red Banner of Labour"],
+		["Big Fat Bass","performer","will.i.am"],
+		["BET Centric Award","winner","Anthony Hamilton"],
+		["Vanessa Paradis","unmarried partner","Florent Pagny"],
+		["Sarah McLachlan","nominated for","Grammy Award for Best Pop Collaboration with Vocals"],
+		["figure skating at the 1964 Winter Olympics – men","participant","Emmerich Danzer"],
+		["Argentina","diplomatic relation","Angola"],
+		["Paul Misraki","employer","Ray Ventura"],
+		["A Fantastic Fear of Everything","screenwriter","Crispian Mills"],
+		["Aimi","time period","21st century"],
+		["Nancy Holloway","on focus list of Wikimedia project","gender gap on Dutch Wikipedia"],
+		["Roberto Carlos","partner in business or sport","Erasmo Carlos"],
+		["Rugrats Go Wild","voice actor","Bruce Willis"],
+		["Kim So-hee","different from","Sohee"],
+		["Jay Reatard","place of burial","Tennessee"],
+		["Jada Pinkett Smith","child","Willow Smith"],
+		["Johyun","part of","Berry Good"],
+		["Kingdom of the Netherlands","shares border with","Belgium"],
+		["Shafin Ahmed","mother","Firoza Begum"],
+		["S. Darko","follows","Donnie Darko"],
+		["Ivi Adamou","residence","Athens"],
+		["Welcome 2 Detroit","producer","Eminem"],
+		["Mena Massoud","notable work","Aladdin"],
+		["No English label found","country","Angola"],
+		["No English label found","place of death","Moscow"],
+		["Seoyul","relative","Seo Yu-na"],
+		["Love and Death","narrative location","Russian Empire"],
+		["Manuel García","student","Manuel García"],
+		["Moll Davis","described by source","Dictionary of National Biography, 1885–1900"],
+		["Tallinn","twinned administrative body","Dartford"],
+		["No English label found","costume designer","Gil Scott-Heron"],
+		["Brian Connolly","member of","The Sweet"],
+		["Parlophone","owned by","PolyGram"],
+		["Andy Griffith","cause of death","cardioplegia"],
+		["Diane Keaton","ethnic group","Irish Americans"],
+		["Agent M","based on","Michael Jackson"],
+		["Jubilee Medal 'Thirty Years of Victory in the Great Patriotic War 1941–1945'","next lower rank","Jubilee Medal 'Forty Years of Victory in the Great Patriotic War 1941–1945'"],
+		["Odesa National Music Academy","named after","Antonina Nezhdanova"],
+		["PorSuiGieco","location of formation","Argentina"],
+		["Klovn","filming location","Frederiksberg"],
+		["Pocahontas","storyboard artist","Jørgen Klubien"],
+		["Roselyn Sánchez","second family name in Spanish name","Rodríguez"],
+		["Michael Jackson","owner of","Sony Music Publishing"],
+		["Michael Hutchence","significant event","Paradise Papers"],
+		["Cleo","followed by","Big White Cloud"],
+		["Student Demonstration Time","contributor to the creative work or subject","Carl Wilson"],
+		["The Best Movie 2","executive producer","Garik Kharlamov"],
+		["Miley Cyrus","godparent","Dolly Parton"],
+		["Brief Encounter","film editor","Jack Harris"],
+		["Vasily Smyslov","country for sport","Soviet Union"],
+		["Genius artist ID","Wikidata property example","Justin Bieber"],
+		["Andy Biersack","work location","Cincinnati"],
+		["Maria","said to be the same as","María"],
+		["René Liu","competition won","Hong Kong Film Award for Best Supporting Actress"],
+		["Pee-wee's Big Adventure","collection","Museum of Modern Art"],
+		["Jack Bruce","copyright representative","PRS for Music"],
+		["Vladimir Vysotsky","supported sports team","PFC CSKA Moscow"],
+		["Scotland","capital","Edinburgh"],
+		["Hanne Verbruggen","replaces","Karen Damen"],
+		["Isabel Parra","family","Parra Family"],
+		["No English label found","creator","Pedro Fernando"],
+		["Finn Christopher Hudson","enemy","Jesse St James"],
+		["Walk the Line","characters","June Carter Cash"],
+		["Alexander","family name identical to this given name","Alexander"],
+		["No English label found","distributed by","No English label found"],
+		["University of Arizona","headquarters location","Tucson"],
+		["I Love You in Every Language in the World","director of photography","Leonardo Pieraccioni"],
+		["No English label found","founded by","Pedro Fernando"],
+		["Heo Sol-ji","affiliation","EXID"],
+		["Jill Von Crastenburg","inspired by","Miley Cyrus"],
+		["No English label found","chief executive officer","Pedro Fernando"],
+		["Adelaide Bonfamille","present in work","The Aristocats"],
+		["Mariposa Folk Festival 1973","organizer","Alanis Obomsawin"],
+		["Manifesto of the 343","signatory","Catherine Deneuve"],
+		["Nima Nakisa","member of sports team","Persepolis F.C."],
+		["Christopher Lee","allegiance","United Kingdom"],
+		["She Loves You","dedicated to","Yui"],
+		["Malibu","located in the administrative territorial entity","Los Angeles County"],
+		["Belles belles belles","soundtrack release","Belles belles belles"],
+		["Blithe Spirit","after a work by","Noël Coward"],
+		["No English label found","parent organization","No English label found"],
+		["Kathleen Aerts","replaced by","Josje Huisman"],
+		["Chris Barnes Is a Pussy","main subject","Chris Barnes"],
+		["Gashi","practiced by","French Montana"],
+		["Eurovision Song Contest 2006","presenter","Sakis Rouvas"],
+		["Anastasiya Makarevich","stepparent","Alexey Makarevich"],
+		["Medal 'For Distinguished Labour'","next higher rank","Medal 'For Labour Valour'"],
+		["Jethro Tull","chairperson","Ian Anderson"],
+		["Lisette Malidor","filmography","The Trout"],
+		["Resident Evil: Extinction","narrator","Milla Jovovich"],
+		["Namthip Jongrachatawiboon","eye color","black"],
+		["United Kingdom","contains the administrative territorial entity","Scotland"],
+		["Oliver & Company","animator","Jørgen Klubien"],
+		["Maria","given name version for other gender","Mario"],
+		["Moscow","capital of","Russian Empire"],
+		["Westmount","enclave within","Montreal"],
+		["M.S. Schepkin Higher Theatre School","location","Moscow"],
+		["Despacito","adapted by","Justin Bieber"],
+		["Mendips, Menlove Avenue","occupant","John Lennon"],
+		["Beautiful Trauma","author","Pink"],
+		["Guy Marchand","conflict","Algerian War"],
+		["No English label found","dramaturge","Judith Vindevogel"],
+		["The Suite Life of Zack & Cody","has spin-off","The Suite Life on Deck"],
+		["No English label found","has subsidiary","No English label found"],
+		["Great Soviet Encyclopedia (1926–1947)","place of publication","Moscow"],
+		["Brihans Natural Products","board member","Ashutosh Agashe"],
+		["New Zealand AIDS Memorial Quilt","commemorates","Peter Allen"],
+		["Friends on the Other Side","musical conductor","Randy Newman"],
+		["Beaches","production company","Bette Midler"],
+		["Screaming Lord Sutch","member of political party","Official Monster Raving Loony Party"],
+		["Barry Hughes","coach of sports team","Sparta Rotterdam"],
+		["Spider-Man: Into the Spider-Verse","part of the series","Spider-Man in film"]
+	],
+    "cleaned_inverse_relations": {
+        "cast member": "acted in",
+        "country of citizenship": "citizen of",
+        "participant in": "included participant",
+        "educated at": "educated",
+        "country of origin": "originates from",
+        "sibling": "has sibling",
+        "influenced by": "influences",
+        "father": "child of",
+        "director": "directed by",
+        "record label": "label of",
+        "given name": "name given to",
+        "has part(s)": "part of",
+        "family name": "surname of",
+        "spouse": "married to",
+        "lyricist": "lyrics by",
+        "has works in the collection": "collection includes",
+        "composer": "composed by",
+        "place of birth": "birthplace of",
+        "student of": "teacher of",
+        "award received": "awarded to",
+        "performer": "performed by",
+        "winner": "won by",
+        "unmarried partner": "partnered with",
+        "nominated for": "nomination received by",
+        "participant": "participated in",
+        "diplomatic relation": "related diplomatically to",
+        "employer": "employs",
+        "screenwriter": "written by",
+        "time period": "period includes",
+        "on focus list of Wikimedia project": "focuses on",
+        "partner in business or sport": "partnered with",
+        "voice actor": "voiced by",
+        "different from": "distinguished from",
+        "place of burial": "burial place of",
+        "child": "parent of",
+        "part of": "includes part",
+        "shares border with": "bordered by",
+        "mother": "child of",
+        "follows": "followed by",
+        "residence": "resided in",
+        "producer": "produced by",
+        "notable work": "work by",
+        "country": "contains country",
+        "place of death": "deathplace of",
+        "relative": "related to",
+        "narrative location": "location of narrative",
+        "student": "teacher of",
+        "described by source": "source describes",
+        "twinned administrative body": "twinned with",
+        "costume designer": "designed costumes for",
+        "member of": "includes member",
+        "owned by": "owns",
+        "cause of death": "death caused by",
+        "ethnic group": "group includes",
+        "based on": "inspired",
+        "next lower rank": "ranked above",
+        "named after": "namesake of",
+        "location of formation": "formed in",
+        "filming location": "filmed in",
+        "storyboard artist": "created storyboard for",
+        "second family name in Spanish name": "second surname of",
+        "owner of": "owned by",
+        "significant event": "event involved",
+        "followed by": "precedes",
+        "contributor to the creative work or subject": "contributed by",
+        "executive producer": "produced by",
+        "godparent": "godchild of",
+        "film editor": "edited by",
+        "country for sport": "sports country",
+        "Wikidata property example": "example of",
+        "work location": "location of work",
+        "said to be the same as": "same as",
+        "competition won": "won by",
+        "collection": "includes in collection",
+        "copyright representative": "represents copyright",
+        "supported sports team": "team supported by",
+        "capital": "capital of",
+        "replaces": "replaced by",
+        "family": "member of family",
+        "creator": "created by",
+        "enemy": "enemy of",
+        "characters": "character in",
+        "family name identical to this given name": "given name identical to",
+        "distributed by": "distributes",
+        "headquarters location": "headquarters of",
+        "director of photography": "photographed by",
+        "founded by": "founded",
+        "affiliation": "affiliated with",
+        "inspired by": "inspired",
+        "chief executive officer": "CEO of",
+        "present in work": "work includes",
+        "organizer": "organized by",
+        "signatory": "signed by",
+        "member of sports team": "team includes",
+        "allegiance": "allegiant to",
+        "dedicated to": "dedication by",
+        "located in the administrative territorial entity": "contains administrative entity",
+        "soundtrack release": "soundtrack of",
+        "after a work by": "inspired by work of",
+        "parent organization": "organization includes",
+        "replaced by": "replaces",
+        "main subject": "subject of",
+        "practiced by": "practices",
+        "presenter": "presented by",
+        "stepparent": "stepchild of",
+        "next higher rank": "ranked below",
+        "chairperson": "chaired by",
+        "filmography": "film includes",
+        "narrator": "narrated by",
+        "eye color": "color of eyes",
+        "contains the administrative territorial entity": "part of administrative entity",
+        "animator": "animated by",
+        "given name version for other gender": "gendered version of",
+        "capital of": "has capital",
+        "enclave within": "encloses",
+        "location": "located in",
+        "adapted by": "adapted from",
+        "occupant": "occupied by",
+        "author": "authored by",
+        "conflict": "conflicted with",
+        "dramaturge": "dramaturgy by",
+        "has spin-off": "spin-off of",
+        "has subsidiary": "subsidiary of",
+        "place of publication": "published in",
+        "board member": "member of board",
+        "commemorates": "commemorated by",
+        "musical conductor": "conducted by",
+        "production company": "produced by company",
+        "member of political party": "party includes",
+        "coach of sports team": "team coached by",
+        "part of the series": "series includes"
     },
-    "relation_descriptions": {
-        "cast member": [
-            "actor in production",
-            "production featuring actor"
-        ],
-        "country of citizenship": [
-            "legal nationality",
-            "citizen of country"
-        ],
-        "participant in": [
-            "involved in event",
-            "event involving participant"
-        ],
-        "educated at": [
-            "attended institution",
-            "institution attended by"
-        ],
-        "country of origin": [
-            "originating country",
-            "country of origin for"
-        ],
-        "sibling": [
-            "has sibling",
-            "has sibling"
-        ],
-        "influenced by": [
-            "inspired by",
-            "inspired"
-        ],
-        "father": [
-            "male parent",
-            "child of father"
-        ],
-        "director": [
-            "film director",
-            "directed by"
-        ],
-        "record label": [
-            "music label",
-            "label of artist"
-        ],
-        "given name": [
-            "first name",
-            "name given to"
-        ],
-        "has part(s)": [
-            "contains component",
-            "component of"
-        ],
-        "family name": [
-            "surname",
-            "surname of"
-        ],
-        "spouse": [
-            "married to",
-            "married to"
-        ],
-        "lyricist": [
-            "wrote lyrics",
-            "lyrics written by"
-        ],
-        "has works in the collection": [
-            "art in collection",
-            "collection containing art"
-        ],
-        "composer": [
-            "wrote music",
-            "music by composer"
-        ],
-        "place of birth": [
-            "birth location",
-            "location of birth"
-        ],
-        "student of": [
-            "learned from",
-            "teacher of student"
-        ],
-        "award received": [
-            "received award",
-            "award given to"
-        ],
-        "performer": [
-            "performed by",
-            "performer of"
-        ],
-        "winner": [
-            "won award",
-            "award won by"
-        ],
-        "unmarried partner": [
-            "romantic partner",
-            "partner of"
-        ],
-        "nominated for": [
-            "award nomination",
-            "nominee for award"
-        ],
-        "participant": [
-            "involved individual",
-            "individual involved in"
-        ],
-        "diplomatic relation": [
-            "international relations",
-            "relations with country"
-        ],
-        "employer": [
-            "workplace",
-            "employs individual"
-        ],
-        "screenwriter": [
-            "wrote screenplay",
-            "screenplay by"
-        ],
-        "time period": [
-            "historical era",
-            "era associated with"
-        ],
-        "on focus list of Wikimedia project": [
-            "highlighted by project",
-            "project highlighting"
-        ],
-        "partner in business or sport": [
-            "collaborator",
-            "collaborated with"
-        ],
-        "voice actor": [
-            "provided voice",
-            "voice provided by"
-        ],
-        "different from": [
-            "not identical to",
-            "not identical to"
-        ],
-        "place of burial": [
-            "burial location",
-            "location of burial"
-        ],
-        "child": [
-            "offspring",
-            "parent of child"
-        ],
-        "part of": [
-            "component of",
-            "contains component"
-        ],
-        "shares border with": [
-            "adjacent to",
-            "adjacent to"
-        ],
-        "mother": [
-            "female parent",
-            "child of mother"
-        ],
-        "follows": [
-            "succeeds",
-            "preceded by"
-        ],
-        "residence": [
-            "lives in",
-            "location of residence"
-        ],
-        "producer": [
-            "produced by",
-            "producer of"
-        ],
-        "notable work": [
-            "famous creation",
-            "creator of work"
-        ],
-        "country": [
-            "sovereign state",
-            "state of"
-        ],
-        "place of death": [
-            "death location",
-            "location of death"
-        ],
-        "relative": [
-            "family member",
-            "family member of"
-        ],
-        "narrative location": [
-            "story setting",
-            "setting of story"
-        ],
-        "student": [
-            "learner",
-            "teacher of"
-        ],
-        "described by source": [
-            "referenced in",
-            "source describing"
-        ],
-        "twinned administrative body": [
-            "sister city",
-            "sister city of"
-        ],
-        "costume designer": [
-            "designed costumes",
-            "costumes by"
-        ],
-        "member of": [
-            "affiliated with",
-            "affiliation includes"
-        ],
-        "owned by": [
-            "possessed by",
-            "possesses"
-        ],
-        "cause of death": [
-            "reason for death",
-            "death caused by"
-        ],
-        "ethnic group": [
-            "cultural heritage",
-            "heritage of"
-        ],
-        "based on": [
-            "inspired by",
-            "inspiration for"
-        ],
-        "next lower rank": [
-            "immediate subordinate",
-            "immediate superior"
-        ],
-        "named after": [
-            "eponymous for",
-            "namesake of"
-        ],
-        "location of formation": [
-            "place founded",
-            "founded in"
-        ],
-        "filming location": [
-            "shot in",
-            "location of filming"
-        ],
-        "storyboard artist": [
-            "created storyboard",
-            "storyboard by"
-        ],
-        "second family name in Spanish name": [
-            "Second surname in Spanish",
-            "Person's second surname"
-        ],
-        "owner of": [
-            "Entity ownership",
-            "Owned by entity"
-        ],
-        "significant event": [
-            "Notable life event",
-            "Event involving person"
-        ],
-        "followed by": [
-            "Preceding entity",
-            "Subsequent entity"
-        ],
-        "contributor to the creative work or subject": [
-            "Creative work contributor",
-            "Work contributed to by"
-        ],
-        "executive producer": [
-            "Production overseer",
-            "Overseen by producer"
-        ],
-        "godparent": [
-            "Spiritual guardian",
-            "Godchild of"
-        ],
-        "film editor": [
-            "Film editing role",
-            "Edited by person"
-        ],
-        "country for sport": [
-            "Sport nationality",
-            "Athlete's country"
-        ],
-        "Wikidata property example": [
-            "Property demonstration",
-            "Example of property"
-        ],
-        "work location": [
-            "Place of work",
-            "Worked by person"
-        ],
-        "said to be the same as": [
-            "Equivalent entity",
-            "Equivalent to entity"
-        ],
-        "competition won": [
-            "Victory in competition",
-            "Won by competitor"
-        ],
-        "collection": [
-            "Part of collection",
-            "Collection containing"
-        ],
-        "copyright representative": [
-            "Copyright agent",
-            "Represented by agent"
-        ],
-        "supported sports team": [
-            "Fan of team",
-            "Team supported by"
-        ],
-        "capital": [
-            "Capital city",
-            "City is capital of"
-        ],
-        "replaces": [
-            "Substitution of entity",
-            "Replaced by entity"
-        ],
-        "family": [
-            "Family relation",
-            "Member of family"
-        ],
-        "creator": [
-            "Entity creator",
-            "Created by entity"
-        ],
-        "enemy": [
-            "Adversarial relation",
-            "Enemy of entity"
-        ],
-        "characters": [
-            "Fictional role",
-            "Role in work"
-        ],
-        "family name identical to this given name": [
-            "Shared name",
-            "Name shared with"
-        ],
-        "distributed by": [
-            "Distribution entity",
-            "Entity distributing"
-        ],
-        "headquarters location": [
-            "Main office location",
-            "Location of headquarters"
-        ],
-        "director of photography": [
-            "Cinematography role",
-            "Filmed by director"
-        ],
-        "founded by": [
-            "Entity founder",
-            "Founded entity"
-        ],
-        "affiliation": [
-            "Organizational membership",
-            "Member of organization"
-        ],
-        "inspired by": [
-            "Source of inspiration",
-            "Inspired entity"
-        ],
-        "chief executive officer": [
-            "Corporate leader",
-            "Led by CEO"
-        ],
-        "present in work": [
-            "Appears in work",
-            "Work featuring entity"
-        ],
-        "organizer": [
-            "Event coordinator",
-            "Coordinated by organizer"
-        ],
-        "signatory": [
-            "Document signer",
-            "Signed by person"
-        ],
-        "member of sports team": [
-            "Team membership",
-            "Team includes member"
-        ],
-        "allegiance": [
-            "Loyalty to entity",
-            "Entity loyal to"
-        ],
-        "dedicated to": [
-            "Dedication recipient",
-            "Dedicated by entity"
-        ],
-        "located in the administrative territorial entity": [
-            "Located in region",
-            "Region containing location"
-        ],
-        "soundtrack release": [
-            "Music release",
-            "Released as soundtrack"
-        ],
-        "after a work by": [
-            "Inspired by work",
-            "Work inspiring entity"
-        ],
-        "parent organization": [
-            "Supervising organization",
-            "Organization supervised by"
-        ],
-        "replaced by": [
-            "Superseded by entity",
-            "Entity superseding"
-        ],
-        "main subject": [
-            "Primary topic",
-            "Topic of focus"
-        ],
-        "practiced by": [
-            "Practitioner of activity",
-            "Activity practiced by"
-        ],
-        "presenter": [
-            "Event host",
-            "Hosted by presenter"
-        ],
-        "stepparent": [
-            "Non-biological parent",
-            "Stepchild of"
-        ],
-        "next higher rank": [
-            "Superior rank",
-            "Rank below entity"
-        ],
-        "chairperson": [
-            "Board leader",
-            "Led by chairperson"
-        ],
-        "filmography": [
-            "Film involvement",
-            "Involved in film"
-        ],
-        "narrator": [
-            "Storyteller",
-            "Narrated by person"
-        ],
-        "eye color": [
-            "Iris pigmentation",
-            "Pigmentation of iris"
-        ],
-        "contains the administrative territorial entity": [
-            "Includes region",
-            "Region included in"
-        ],
-        "animator": [
-            "Animation creator",
-            "Created by animator"
-        ],
-        "given name version for other gender": [
-            "Gendered name variant",
-            "Variant of gendered name"
-        ],
-        "capital of": [
-            "City governing region",
-            "Region governed by city"
-        ],
-        "enclave within": [
-            "Surrounded by region",
-            "Region surrounding enclave"
-        ],
-        "location": [
-            "Geographical place",
-            "Place of entity"
-        ],
-        "adapted by": [
-            "Work adaptation",
-            "Adapted from work"
-        ],
-        "occupant": [
-            "Resident of place",
-            "Place occupied by"
-        ],
-        "author": [
-            "Written by",
-            "Work authored by"
-        ],
-        "conflict": [
-            "Involved in war",
-            "War involving entity"
-        ],
-        "dramaturge": [
-            "work's dramaturge",
-            "dramaturge of work"
-        ],
-        "has spin-off": [
-            "originates spin-off",
-            "derived from original"
-        ],
-        "has subsidiary": [
-            "owns subsidiary",
-            "owned by parent"
-        ],
-        "place of publication": [
-            "location of publishing",
-            "publishing occurred at"
-        ],
-        "board member": [
-            "serves on board",
-            "board includes member"
-        ],
-        "commemorates": [
-            "honors memory of",
-            "is honored by"
-        ],
-        "musical conductor": [
-            "conducted by musician",
-            "musician conducts"
-        ],
-        "production company": [
-            "produced by company",
-            "company produces"
-        ],
-        "member of political party": [
-            "affiliated with party",
-            "party affiliation of"
-        ],
-        "coach of sports team": [
-            "coaches team",
-            "team coached by"
-        ],
-        "part of the series": [
-            "belongs to series",
-            "series includes part"
-        ],
-        "scenographer": [
-            "created set design",
-            "set design by"
-        ],
-        "director / manager": [
-            "managed by",
-            "manages"
-        ],
-        "archives at": [
-            "archived at",
-            "archives location"
-        ],
-        "significant person": [
-            "notable individual",
-            "person of significance"
-        ]
+    "inverse_relations_descriptions": {
+        "cast member": "acted in work",
+        "country of citizenship": "citizen of country",
+        "participant in": "included participant",
+        "educated at": "education institution",
+        "country of origin": "origin country",
+        "sibling": "has sibling",
+        "influenced by": "influences entity",
+        "father": "child of father",
+        "director": "directed by person",
+        "record label": "label of artist",
+        "given name": "name assigned",
+        "has part(s)": "included in whole",
+        "family name": "surname of person",
+        "spouse": "married to person",
+        "lyricist": "lyrics written by",
+        "has works in the collection": "collection includes work",
+        "composer": "music composed by",
+        "place of birth": "birthplace of person",
+        "student of": "teacher of student",
+        "award received": "awarded to entity",
+        "performer": "performed by artist",
+        "winner": "won by entity",
+        "unmarried partner": "partnered with person",
+        "nominated for": "nomination received",
+        "participant": "participated in event",
+        "diplomatic relation": "related diplomatically",
+        "employer": "employs person",
+        "screenwriter": "written by author",
+        "time period": "period includes event",
+        "on focus list of Wikimedia project": "focused by project",
+        "partner in business or sport": "partnered in activity",
+        "voice actor": "voiced by actor",
+        "different from": "distinguished from entity",
+        "place of burial": "burial site of",
+        "child": "parent of child",
+        "part of": "included in whole",
+        "shares border with": "bordered by entity",
+        "mother": "child of mother",
+        "follows": "followed by entity",
+        "residence": "resided in location",
+        "producer": "produced by person",
+        "notable work": "work by person",
+        "country": "contains country",
+        "place of death": "deathplace of person",
+        "relative": "related to entity",
+        "narrative location": "location of story",
+        "student": "teacher of student",
+        "described by source": "source describes",
+        "twinned administrative body": "twinned with entity",
+        "costume designer": "designed costumes",
+        "member of": "includes member",
+        "owned by": "owns entity",
+        "cause of death": "death caused by",
+        "ethnic group": "group includes",
+        "based on": "inspired entity",
+        "next lower rank": "ranked above",
+        "named after": "namesake of entity",
+        "location of formation": "formed in location",
+        "filming location": "filmed in place",
+        "storyboard artist": "created storyboard",
+        "second family name in Spanish name": "second surname",
+        "owner of": "owned by entity",
+        "significant event": "event involved",
+        "followed by": "precedes entity",
+        "contributor to the creative work or subject": "contributed by",
+        "executive producer": "produced by person",
+        "godparent": "godchild of person",
+        "film editor": "edited by person",
+        "country for sport": "sports country",
+        "Wikidata property example": "example of property",
+        "work location": "location of work",
+        "said to be the same as": "same as entity",
+        "competition won": "won by entity",
+        "collection": "includes in collection",
+        "copyright representative": "represents copyright",
+        "supported sports team": "team supported",
+        "capital": "capital of entity",
+        "replaces": "replaced by entity",
+        "family": "member of family",
+        "creator": "created by person",
+        "enemy": "enemy of entity",
+        "characters": "character in work",
+        "family name identical to this given name": "given name identical",
+        "distributed by": "distributes entity",
+        "headquarters location": "headquarters of entity",
+        "director of photography": "photographed by",
+        "founded by": "founded entity",
+        "affiliation": "affiliated with entity",
+        "inspired by": "inspired entity",
+        "chief executive officer": "CEO of entity",
+        "present in work": "work includes entity",
+        "organizer": "organized by person",
+        "signatory": "signed by person",
+        "member of sports team": "team includes member",
+        "allegiance": "allegiant to entity",
+        "dedicated to": "dedication by entity",
+        "located in the administrative territorial entity": "contains administrative entity",
+        "soundtrack release": "soundtrack of work",
+        "after a work by": "inspired by work",
+        "parent organization": "organization includes",
+        "replaced by": "replaces entity",
+        "main subject": "subject of work",
+        "practiced by": "practices entity",
+        "presenter": "presented by person",
+        "stepparent": "stepchild of person",
+        "next higher rank": "ranked below entity",
+        "chairperson": "chaired by person",
+        "filmography": "film includes entity",
+        "narrator": "narrated by person",
+        "eye color": "color of eyes",
+        "contains the administrative territorial entity": "part of administrative entity",
+        "animator": "animated by person",
+        "given name version for other gender": "gendered version of name",
+        "capital of": "has capital",
+        "enclave within": "encloses entity",
+        "location": "located in place",
+        "adapted by": "adapted from work",
+        "occupant": "occupied by person",
+        "author": "authored by person",
+        "conflict": "conflicted with entity",
+        "dramaturge": "dramaturgy by person",
+        "has spin-off": "spin-off of work",
+        "has subsidiary": "subsidiary of entity",
+        "place of publication": "published in place",
+        "board member": "member of board",
+        "commemorates": "commemorated by entity",
+        "musical conductor": "conducted by person",
+        "production company": "produced by company",
+        "member of political party": "party includes member",
+        "coach of sports team": "team coached by person",
+        "part of the series": "series includes work"
     }
 }

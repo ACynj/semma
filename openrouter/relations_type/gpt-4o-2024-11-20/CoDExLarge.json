@@ -1,351 +1,215 @@
 {
-    "cleaned_relations": {
-        "country of citizenship": "Country of Citizenship",
-        "country": "Country",
-        "occupation": "Occupation",
-        "place of birth": "Place of Birth",
-        "member of political party": "Member of Political Party",
-        "educated at": "Educated At",
-        "genre": "Genre",
-        "member of": "Member Of",
-        "located in the administrative territorial entity": "Located in Administrative Territorial Entity",
-        "languages spoken, written or signed": "Languages Spoken, Written or Signed",
-        "religion or worldview": "Religion or Worldview",
-        "instrument": "Instrument",
-        "sibling": "Sibling",
-        "place of death": "Place of Death",
-        "shares border with": "Shares Border With",
-        "spouse": "Spouse",
-        "place of burial": "Place of Burial",
-        "cast member": "Cast Member",
-        "record label": "Record Label",
-        "field of work": "Field of Work",
-        "employer": "Employer",
-        "influenced by": "Influenced By",
-        "location of formation": "Location of Formation",
-        "diplomatic relation": "Diplomatic Relation",
-        "cause of death": "Cause of Death",
-        "country of origin": "Country of Origin",
-        "residence": "Residence",
-        "airline hub": "Airline Hub",
-        "official language": "Official Language",
-        "narrative location": "Narrative Location",
-        "capital": "Capital",
-        "ethnic group": "Ethnic Group",
-        "member of sports team": "Member of Sports Team",
-        "language of work or name": "Language of Work or Name",
-        "time period": "Time Period",
-        "headquarters location": "Headquarters Location",
-        "child": "Child",
-        "sport": "Sport",
-        "medical condition": "Medical Condition",
-        "movement": "Movement",
-        "director": "Director",
-        "uses": "Uses",
-        "founded by": "Founded By",
-        "parent organization": "Parent Organization",
-        "continent": "Continent",
-        "occupant": "Occupant",
-        "mountain range": "Mountain Range",
-        "symptoms and signs": "Symptoms and Signs",
-        "part of": "Part Of",
-        "publisher": "Publisher",
-        "drug or therapy used for treatment": "Drug or Therapy Used for Treatment",
-        "industry": "Industry",
-        "named after": "Named After",
-        "unmarried partner": "Unmarried Partner",
-        "airline alliance": "Airline Alliance",
-        "creator": "Creator",
-        "legal form": "Legal Form",
-        "author": "Author",
-        "chairperson": "Chairperson",
-        "health specialty": "Health Specialty",
-        "architect": "Architect",
-        "chief executive officer": "Chief Executive Officer",
-        "product or material produced": "Product or Material Produced",
-        "architectural style": "Architectural Style",
-        "legislative body": "Legislative Body",
-        "practiced by": "Practiced By",
-        "foundational text": "Foundational Text",
-        "is the study of": "Is the Study Of",
-        "has use": "Has Use"
+    "Examples": [
+		["Gianfranco Chiarini","country of citizenship","Italy"],
+		["Padua","country","Austrian Empire"],
+		["Ad-Rock","occupation","songwriter"],
+		["Leslie Brooks","place of birth","Lincoln"],
+		["Franklin Raines","member of political party","Democratic Party"],
+		["Lajos Holló","educated at","Eötvös Loránd University"],
+		["The Lord of the Rings: The Return of the King","genre","film based on a novel"],
+		["Jordan","member of","United Nations–African Union Hybrid Operation in Darfur"],
+		["Ulrichshorn","located in the administrative territorial entity","Valais"],
+		["Subhas Chandra Bose","languages spoken, written or signed","Bangla"],
+		["Theo Lehmann","religion or worldview","Lutheranism"],
+		["Jan Carpentier","instrument","voice"],
+		["Christopher I of Denmark","sibling","Abel of Denmark"],
+		["Josef Scheungraber","place of death","Ottobrunn"],
+		["Lavizzara","shares border with","Sonogno"],
+		["Ingrid Bergman","spouse","Roberto Rossellini"],
+		["Illarion Semjonovitsj Sventsitskiy","place of burial","Lychakiv Cemetery"],
+		["Black Swan","cast member","Janet Montgomery"],
+		["Ebi","record label","Caltex Records"],
+		["Wendy Cope","field of work","poetry"],
+		["Moniek Toebosch","employer","Gerrit Rietveld Academie"],
+		["Gottfried Wilhelm Leibniz","influenced by","Confucius"],
+		["God Forbid","location of formation","East Brunswick"],
+		["Colombia","diplomatic relation","Australia"],
+		["Leopoldo Calvo-Sotelo","cause of death","cardiac arrest"],
+		["The Second Time","country of origin","France"],
+		["Tim Rice-Oxley","residence","Battle"],
+		["Dan-Air","airline hub","Manchester Airport"],
+		["Borgnone","official language","Italian"],
+		["Getting Even with Dad","narrative location","San Francisco"],
+		["Slovakia","capital","Bratislava"],
+		["Casey Anderson","ethnic group","African Americans"],
+		["Raimon Carrasco","member of sports team","FC Barcelona"],
+		["Le Charivari","language of work or name","French"],
+		["Zeno","time period","Roman Empire"],
+		["Adeline Records","headquarters location","Oakland"],
+		["Robert Richardson","child","Kanchan Wali-Richardson"],
+		["Arvydas Juozaitis","sport","swimming"],
+		["Evelyn Keyes","medical condition","Alzheimer's disease"],
+		["Jacob Paix","movement","Baroque music"],
+		["Taxi zum Klo","director","Frank Ripploh"],
+		["12:01","uses","time loop"],
+		["Royal Prussian Academy of Sciences","founded by","Frederick I of Prussia"],
+		["Vueling","parent organization","International Airlines Group"],
+		["Bijapur Sultanate","continent","Asia"],
+		["Arsenal Stadium","occupant","Arsenal F.C."],
+		["Pizzo di Claro","mountain range","Adula Massif"],
+		["Mycoplasma pneumoniae infection","symptoms and signs","cough"],
+		["Gelfingen","part of","Hitzkirch"],
+		["Norwegian Wood","publisher","Kodansha"],
+		["gram-negative bacterial infection","drug or therapy used for treatment","cefdinir"],
+		["The Wall Street Journal","industry","journalism"],
+		["F. E. Dzerzhinsky Naval Engineering Academy","named after","Felix Dzerzhinsky"],
+		["Carlo Tresca","unmarried partner","Elizabeth Gurley Flynn"],
+		["Alitalia CityLiner","airline alliance","SkyTeam"],
+		["Assault and Capture of the Entrenched Battlefield of Hulst","creator","Jan Snellinck"],
+		["SM Entertainment","legal form","joint-stock company"],
+		["A Majority of One","author","Leonard Spigelgass"],
+		["Association for the Advancement of Artificial Intelligence","chairperson","Daniel G. Bobrow"],
+		["scarlet fever","health specialty","infectious diseases"],
+		["Emirates Stadium","architect","Populous"],
+		["Qantas","chief executive officer","Alan Joyce"],
+		["C-JeS Studios","product or material produced","drama"],
+		["Allianz Arena","architectural style","high-tech architecture"],
+		["French Fourth Republic","legislative body","French Parliament"],
+		["Amit Schejter","practiced by","professor"],
+		["Christianity","foundational text","Bible"],
+		["Zbigniew Preisner","is the study of","philosophy"],
+		["Jernvallen","has use","bandy"]
+	],
+    "cleaned_inverse_relations": {
+        "country of citizenship": "citizen of",
+        "country": "contains city",
+        "occupation": "employs person",
+        "place of birth": "birthplace of",
+        "member of political party": "has member",
+        "educated at": "alumnus of",
+        "genre": "has genre",
+        "member of": "has member",
+        "located in the administrative territorial entity": "administrative entity of",
+        "languages spoken, written or signed": "language of",
+        "religion or worldview": "follower of",
+        "instrument": "played by",
+        "sibling": "sibling of",
+        "place of death": "death place of",
+        "shares border with": "shares border with",
+        "spouse": "spouse of",
+        "place of burial": "burial place of",
+        "cast member": "acted in",
+        "record label": "released by",
+        "field of work": "studied by",
+        "employer": "employs",
+        "influenced by": "influenced",
+        "location of formation": "formed in",
+        "diplomatic relation": "diplomatic relation with",
+        "cause of death": "causes death of",
+        "country of origin": "origin of",
+        "residence": "residence of",
+        "airline hub": "hub for airline",
+        "official language": "official language of",
+        "narrative location": "setting of",
+        "capital": "capital of",
+        "ethnic group": "member of ethnic group",
+        "member of sports team": "has player",
+        "language of work or name": "used in work or name",
+        "time period": "active during",
+        "headquarters location": "hosts headquarters of",
+        "child": "parent of",
+        "sport": "played by athlete",
+        "medical condition": "suffers from",
+        "movement": "led movement",
+        "director": "directed",
+        "uses": "used by",
+        "founded by": "founded",
+        "parent organization": "has subsidiary",
+        "continent": "located on continent",
+        "occupant": "occupies",
+        "mountain range": "has mountain",
+        "symptoms and signs": "symptom of",
+        "part of": "has part",
+        "publisher": "published by",
+        "drug or therapy used for treatment": "treats disease",
+        "industry": "belongs to industry",
+        "named after": "namesake of",
+        "unmarried partner": "partner of",
+        "airline alliance": "has member airline",
+        "creator": "created",
+        "legal form": "has legal form",
+        "author": "authored",
+        "chairperson": "chairs",
+        "health specialty": "specializes in",
+        "architect": "designed",
+        "chief executive officer": "leads",
+        "product or material produced": "produced by",
+        "architectural style": "has style",
+        "legislative body": "governed by",
+        "practiced by": "practiced by",
+        "foundational text": "basis of",
+        "is the study of": "studied by",
+        "has use": "used for"
     },
-    "relation_descriptions": {
-        "country of citizenship": [
-            "person's nationality",
-            "citizen of a country"
-        ],
-        "country": [
-            "entity's sovereign state",
-            "sovereign state of entity"
-        ],
-        "occupation": [
-            "person's job role",
-            "job role held by"
-        ],
-        "place of birth": [
-            "birth location",
-            "location where born"
-        ],
-        "member of political party": [
-            "political affiliation",
-            "party with member"
-        ],
-        "educated at": [
-            "educational institution attended",
-            "institution attended by student"
-        ],
-        "genre": [
-            "work's category",
-            "category of work"
-        ],
-        "member of": [
-            "affiliation to group",
-            "group with member"
-        ],
-        "located in the administrative territorial entity": [
-            "location within territory",
-            "territory containing location"
-        ],
-        "languages spoken, written or signed": [
-            "language known",
-            "known by speaker"
-        ],
-        "religion or worldview": [
-            "belief system",
-            "system believed by"
-        ],
-        "instrument": [
-            "musical tool used",
-            "used by musician"
-        ],
-        "sibling": [
-            "person's brother or sister",
-            "brother or sister of"
-        ],
-        "place of death": [
-            "death location",
-            "location of death"
-        ],
-        "shares border with": [
-            "neighboring region",
-            "neighbor of region"
-        ],
-        "spouse": [
-            "married partner",
-            "partner in marriage"
-        ],
-        "place of burial": [
-            "burial location",
-            "location of burial"
-        ],
-        "cast member": [
-            "actor in work",
-            "work featuring actor"
-        ],
-        "record label": [
-            "music publisher",
-            "publisher of music"
-        ],
-        "field of work": [
-            "professional area",
-            "area of professional work"
-        ],
-        "employer": [
-            "hiring entity",
-            "entity employing person"
-        ],
-        "influenced by": [
-            "source of influence",
-            "influence on source"
-        ],
-        "location of formation": [
-            "place founded",
-            "founded entity location"
-        ],
-        "diplomatic relation": [
-            "foreign relations",
-            "nation's relation"
-        ],
-        "cause of death": [
-            "reason for death",
-            "death caused by"
-        ],
-        "country of origin": [
-            "source country",
-            "country for source"
-        ],
-        "residence": [
-            "living location",
-            "place where resides"
-        ],
-        "airline hub": [
-            "central airport",
-            "airport for airline"
-        ],
-        "official language": [
-            "state-sanctioned language",
-            "language sanctioned by state"
-        ],
-        "narrative location": [
-            "story setting",
-            "setting for story"
-        ],
-        "capital": [
-            "government center",
-            "center of governance"
-        ],
-        "ethnic group": [
-            "cultural heritage",
-            "group with heritage"
-        ],
-        "member of sports team": [
-            "athlete's team",
-            "team with athlete"
-        ],
-        "language of work or name": [
-            "work's language",
-            "language for work"
-        ],
-        "time period": [
-            "historical era",
-            "era containing entity"
-        ],
-        "headquarters location": [
-            "main office site",
-            "site hosting headquarters"
-        ],
-        "child": [
-            "offspring",
-            "parent of offspring"
-        ],
-        "sport": [
-            "athletic activity",
-            "activity played by athlete"
-        ],
-        "medical condition": [
-            "disease or disorder",
-            "disorder in person"
-        ],
-        "movement": [
-            "artistic style",
-            "style represented by"
-        ],
-        "director": [
-            "film overseer",
-            "overseen by director"
-        ],
-        "uses": [
-            "utilized concept",
-            "concept utilized by"
-        ],
-        "founded by": [
-            "initiator of organization",
-            "organization initiated by"
-        ],
-        "parent organization": [
-            "controlling entity",
-            "entity controlled by"
-        ],
-        "continent": [
-            "global landmass",
-            "landmass where located"
-        ],
-        "occupant": [
-            "tenant of space",
-            "space housed by tenant"
-        ],
-        "mountain range": [
-            "geological chain",
-            "chain containing peak"
-        ],
-        "symptoms and signs": [
-            "clinical indicators",
-            "indicated by symptoms"
-        ],
-        "part of": [
-            "component of whole",
-            "whole containing component"
-        ],
-        "publisher": [
-            "distributing entity",
-            "work distributed by"
-        ],
-        "drug or therapy used for treatment": [
-            "therapy for condition",
-            "condition treated by drug"
-        ],
-        "industry": [
-            "economic sector",
-            "sector entity belongs to"
-        ],
-        "named after": [
-            "namesake entity",
-            "entity named after"
-        ],
-        "unmarried partner": [
-            "romantic partner",
-            "partner for romance"
-        ],
-        "airline alliance": [
-            "aviation collaboration",
-            "collaboration by airline"
-        ],
-        "creator": [
-            "originator of work",
-            "work by originator"
-        ],
-        "legal form": [
-            "organizational type",
-            "type of organization"
-        ],
-        "author": [
-            "text writer",
-            "written by author"
-        ],
-        "chairperson": [
-            "organizational leader",
-            "organization led by"
-        ],
-        "health specialty": [
-            "medical focus",
-            "focus for specialty"
-        ],
-        "architect": [
-            "building designer",
-            "designed by architect"
-        ],
-        "chief executive officer": [
-            "organization head",
-            "led by executive"
-        ],
-        "product or material produced": [
-            "output of producer",
-            "producer's output"
-        ],
-        "architectural style": [
-            "building aesthetic",
-            "aesthetic of building"
-        ],
-        "legislative body": [
-            "law-making group",
-            "group creating laws"
-        ],
-        "practiced by": [
-            "done by practitioner",
-            "practitioner for action"
-        ],
-        "foundational text": [
-            "key written work",
-            "work foundational to"
-        ],
-        "is the study of": [
-            "academic focus",
-            "focus of study"
-        ],
-        "has use": [
-            "intended purpose",
-            "purpose associated with"
-        ]
+    "inverse_relations_descriptions": {
+        "country of citizenship": "identifies citizen origin",
+        "country": "contains smaller location",
+        "occupation": "provides job role",
+        "place of birth": "location of birth",
+        "member of political party": "includes political member",
+        "educated at": "institution alumnus relation",
+        "genre": "classifies creative work",
+        "member of": "includes organizational member",
+        "located in the administrative territorial entity": "governs specific area",
+        "languages spoken, written or signed": "uses specific language",
+        "religion or worldview": "followed belief system",
+        "instrument": "used by musician",
+        "sibling": "shares same parent",
+        "place of death": "location of death",
+        "shares border with": "adjacent geographic area",
+        "spouse": "married counterpart",
+        "place of burial": "burial site location",
+        "cast member": "performed in production",
+        "record label": "publishes recorded work",
+        "field of work": "research or expertise area",
+        "employer": "hires and manages person",
+        "influenced by": "impacted another thinker",
+        "location of formation": "origin of organization",
+        "diplomatic relation": "mutual international tie",
+        "cause of death": "reason for demise",
+        "country of origin": "origin nation source",
+        "residence": "living location",
+        "airline hub": "central airport base",
+        "official language": "language designated official",
+        "narrative location": "story setting location",
+        "capital": "primary city of country",
+        "ethnic group": "people of shared descent",
+        "member of sports team": "plays for sports team",
+        "language of work or name": "language used in work",
+        "time period": "historical activity span",
+        "headquarters location": "organization main base",
+        "child": "offspring relation",
+        "sport": "athletic discipline type",
+        "medical condition": "disease affecting person",
+        "movement": "directed social movement",
+        "director": "creator of film",
+        "uses": "applied function or tool",
+        "founded by": "initiated by founder",
+        "parent organization": "controls sub organization",
+        "continent": "major landmass region",
+        "occupant": "entity inhabiting location",
+        "mountain range": "group of connected peaks",
+        "symptoms and signs": "indicates medical condition",
+        "part of": "belongs to larger whole",
+        "publisher": "entity issuing publication",
+        "drug or therapy used for treatment": "used to cure disease",
+        "industry": "economic sector association",
+        "named after": "honors another entity",
+        "unmarried partner": "romantic companion",
+        "airline alliance": "collective of airlines",
+        "creator": "originator of work",
+        "legal form": "defines organization structure",
+        "author": "writer of text",
+        "chairperson": "leads organization board",
+        "health specialty": "medical expertise area",
+        "architect": "designer of building",
+        "chief executive officer": "corporate leader role",
+        "product or material produced": "manufactured output type",
+        "architectural style": "design aesthetic category",
+        "legislative body": "political governing institution",
+        "practiced by": "performed by practitioner",
+        "foundational text": "core doctrine document",
+        "is the study of": "academic focus area",
+        "has use": "serves practical purpose"
     }
 }

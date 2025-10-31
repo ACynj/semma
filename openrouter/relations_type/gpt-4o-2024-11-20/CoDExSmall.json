@@ -1,216 +1,135 @@
 {
-    "cleaned_relations": {
-        "languages spoken, written or signed": "Languages spoken, written, or signed",
-        "cause of death": "Cause of death",
-        "member of": "Member of",
-        "occupation": "Occupation",
-        "sibling": "Sibling",
-        "diplomatic relation": "Diplomatic relation",
-        "continent": "Continent",
-        "ethnic group": "Ethnic group",
-        "country of citizenship": "Country of citizenship",
-        "employer": "Employer",
-        "educated at": "Educated at",
-        "place of birth": "Place of birth",
-        "influenced by": "Influenced by",
-        "field of work": "Field of work",
-        "genre": "Genre",
-        "record label": "Record label",
-        "instrument": "Instrument",
-        "official language": "Official language",
-        "unmarried partner": "Unmarried partner",
-        "place of death": "Place of death",
-        "country": "Country",
-        "religion or worldview": "Religion or worldview",
-        "movement": "Movement",
-        "residence": "Residence",
-        "spouse": "Spouse",
-        "member of political party": "Member of political party",
-        "place of burial": "Place of burial",
-        "part of": "Part of",
-        "medical condition": "Medical condition",
-        "child": "Child",
-        "time period": "Time period",
-        "headquarters location": "Headquarters location",
-        "narrative location": "Narrative location",
-        "location of formation": "Location of formation",
-        "head of state": "Head of state",
-        "named after": "Named after",
-        "parent organization": "Parent organization",
-        "notable work": "Notable work",
-        "cast member": "Cast member",
-        "founded by": "Founded by",
-        "country of origin": "Country of origin",
-        "practiced by": "Practiced by"
+    "Examples": [
+		["Leonhard Euler","languages spoken, written or signed","German"],
+		["Carl Djerassi","cause of death","cancer"],
+		["Colombia","member of","International Finance Corporation"],
+		["Henry Rollins","occupation","human rights activist"],
+		["Latoya Jackson","sibling","Jackie Jackson"],
+		["Taiwan","diplomatic relation","Republic of the Congo"],
+		["Weimar Republic","continent","Europe"],
+		["Louis Armstrong","ethnic group","African Americans"],
+		["Oprah Winfrey","country of citizenship","United States"],
+		["Alfred Einstein","employer","Columbia University"],
+		["Heinrich Hertz","educated at","Humboldt University of Berlin"],
+		["Richard Marx","place of birth","Chicago"],
+		["Bertrand Russell","influenced by","Percy Bysshe Shelley"],
+		["George Tabori","field of work","performing arts"],
+		["J. Rodolfo Wilcock","genre","novel"],
+		["Leonard Cohen","record label","Columbia Records"],
+		["Brian Molko","instrument","vocalist"],
+		["Académie Française","official language","French"],
+		["Nick Jonas","unmarried partner","Miley Cyrus"],
+		["Massimo Bontempelli","place of death","Rome"],
+		["Malta","country","Commonwealth of Nations"],
+		["Charles Dickens","religion or worldview","Anglicanism"],
+		["John Stuart Mill","movement","atheism"],
+		["Carl Djerassi","residence","Vienna"],
+		["Katharine McPhee","spouse","David Foster"],
+		["Anatoly Lunacharsky","member of political party","Communist Party of the Soviet Union"],
+		["Ferdinand von Richthofen","place of burial","Berlin"],
+		["Colombia","part of","Hispanic America"],
+		["D. H. Lawrence","medical condition","tuberculosis"],
+		["Nat King Cole","child","Natalie Cole"],
+		["Franz Kafka","time period","20th century"],
+		["Republic Records","headquarters location","New York City"],
+		["Zoolander","narrative location","New York City"],
+		["Parlophone","location of formation","Berlin"],
+		["Canada","head of state","Elizabeth II"],
+		["South Africa","named after","Africa"],
+		["Atco Records","parent organization","Warner Music Group"],
+		["Hanns Eisler","notable work","symphony"],
+		["The Compleat Beatles","cast member","Ringo Starr"],
+		["Warner Music Group","founded by","Warner Bros."],
+		["Zoolander","country of origin","United States"],
+		["Judaism","practiced by","Jewish people"]
+	],
+    "cleaned_inverse_relations": {
+          "languages spoken, written or signed": "language spoken by",
+          "cause of death": "caused death of",
+          "member of": "has member",
+          "occupation": "employed as",
+          "sibling": "sibling of",
+          "diplomatic relation": "has diplomatic relation with",
+          "continent": "contains country",
+          "ethnic group": "has ethnic member",
+          "country of citizenship": "citizen of country",
+          "employer": "employs person",
+          "educated at": "educated person",
+          "place of birth": "birthplace of",
+          "influenced by": "influenced",
+          "field of work": "worked in by",
+          "genre": "genre of work",
+          "record label": "produced artist",
+          "instrument": "played by musician",
+          "official language": "official language of",
+          "unmarried partner": "unmarried partner of",
+          "place of death": "deathplace of",
+          "country": "contains region",
+          "religion or worldview": "believer of religion",
+          "movement": "member of movement",
+          "residence": "resident of",
+          "spouse": "spouse of",
+          "member of political party": "has party member",
+          "place of burial": "burial place of",
+          "part of": "contains entity",
+          "medical condition": "affects person",
+          "child": "parent of",
+          "time period": "occurred during",
+          "headquarters location": "headquartered organization",
+          "narrative location": "setting for",
+          "location of formation": "organization formed at",
+          "head of state": "head of",
+          "named after": "name source for",
+          "parent organization": "subsidiary of",
+          "notable work": "created by",
+          "cast member": "acted in",
+          "founded by": "founded organization",
+          "country of origin": "origin country of",
+          "practiced by": "practices religion"
     },
-    "relation_descriptions": {
-        "languages spoken, written or signed": [
-            "Language used",
-            "Used by speaker"
-        ],
-        "cause of death": [
-            "Reason for death",
-            "Fatal consequence"
-        ],
-        "member of": [
-            "Membership relation",
-            "Includes member"
-        ],
-        "occupation": [
-            "Job or role",
-            "Employer's worker"
-        ],
-        "sibling": [
-            "Brother or sister",
-            "Brother or sister"
-        ],
-        "diplomatic relation": [
-            "International relations",
-            "International relations"
-        ],
-        "continent": [
-            "Geographic continent",
-            "Continent of location"
-        ],
-        "ethnic group": [
-            "Cultural ethnicity",
-            "Group's individual"
-        ],
-        "country of citizenship": [
-            "National citizenship",
-            "Citizen of country"
-        ],
-        "employer": [
-            "Workplace affiliation",
-            "Has employee"
-        ],
-        "educated at": [
-            "Education institution",
-            "Educated individual"
-        ],
-        "place of birth": [
-            "Birthplace location",
-            "Location of birth"
-        ],
-        "influenced by": [
-            "Source of influence",
-            "Impacts others"
-        ],
-        "field of work": [
-            "Work specialization",
-            "Specialized field worker"
-        ],
-        "genre": [
-            "Artistic genre",
-            "Belongs to genre"
-        ],
-        "record label": [
-            "Music label",
-            "Signed artist"
-        ],
-        "instrument": [
-            "Played instrument",
-            "Instrumental user"
-        ],
-        "official language": [
-            "Authorized language",
-            "Language in use"
-        ],
-        "unmarried partner": [
-            "Romantic partner",
-            "Romantic partner"
-        ],
-        "place of death": [
-            "Death location",
-            "Location of death"
-        ],
-        "country": [
-            "Country entity",
-            "Includes country"
-        ],
-        "religion or worldview": [
-            "Belief or religion",
-            "Follower or adherent"
-        ],
-        "movement": [
-            "Ideological movement",
-            "Participates in movement"
-        ],
-        "residence": [
-            "Place of living",
-            "Resident lives in"
-        ],
-        "spouse": [
-            "Married partner",
-            "Married partner"
-        ],
-        "member of political party": [
-            "Political party member",
-            "Includes politician"
-        ],
-        "place of burial": [
-            "Burial site",
-            "Buried individual"
-        ],
-        "part of": [
-            "Component relationship",
-            "Includes subsystem"
-        ],
-        "medical condition": [
-            "Health condition",
-            "Condition affects"
-        ],
-        "child": [
-            "Biological offspring",
-            "Parent of child"
-        ],
-        "time period": [
-            "Historical time period",
-            "Period's individual"
-        ],
-        "headquarters location": [
-            "HQ location",
-            "Location of HQ"
-        ],
-        "narrative location": [
-            "Fictional setting",
-            "Setting for story"
-        ],
-        "location of formation": [
-            "Formation site",
-            "Formed entity"
-        ],
-        "head of state": [
-            "State leader",
-            "State leadership"
-        ],
-        "named after": [
-            "Source of name",
-            "Name derived from"
-        ],
-        "parent organization": [
-            "Supervising organization",
-            "Subordinate organization"
-        ],
-        "notable work": [
-            "Famous creation",
-            "Created by"
-        ],
-        "cast member": [
-            "Actor in film",
-            "Film includes cast"
-        ],
-        "founded by": [
-            "Founder relation",
-            "Founded entity"
-        ],
-        "country of origin": [
-            "Production country",
-            "Country produces"
-        ],
-        "practiced by": [
-            "Belief practitioner",
-            "Practice of believer"
-        ]
+    "inverse_relations_descriptions": {
+          "languages spoken, written or signed": "spoken by people",
+          "cause of death": "leads to death",
+          "member of": "includes individual",
+          "occupation": "job held by",
+          "sibling": "shares parent with",
+          "diplomatic relation": "maintains relations with",
+          "continent": "contains nations",
+          "ethnic group": "composed of people",
+          "country of citizenship": "governs citizens",
+          "employer": "provides employment",
+          "educated at": "trains students",
+          "place of birth": "birthplace location",
+          "influenced by": "inspired others",
+          "field of work": "studied by person",
+          "genre": "categorizes works",
+          "record label": "produces music for",
+          "instrument": "used by musician",
+          "official language": "used in region",
+          "unmarried partner": "romantic partner of",
+          "place of death": "death location",
+          "country": "comprises territories",
+          "religion or worldview": "followed by person",
+          "movement": "involves supporters",
+          "residence": "lived by person",
+          "spouse": "married to",
+          "member of political party": "includes politician",
+          "place of burial": "burial site",
+          "part of": "contains components",
+          "medical condition": "disease suffered by",
+          "child": "parental relationship",
+          "time period": "happened during",
+          "headquarters location": "hosts organization",
+          "narrative location": "setting of story",
+          "location of formation": "formation site",
+          "head of state": "leads country",
+          "named after": "gives name to",
+          "parent organization": "controls subsidiary",
+          "notable work": "created work",
+          "cast member": "acts in film",
+          "founded by": "established by person",
+          "country of origin": "originated in",
+          "practiced by": "followed by believers"
     }
+      
 }

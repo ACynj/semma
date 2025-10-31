@@ -1,126 +1,80 @@
-{
-    "cleaned_relations": {
-        "Gr>G": "Gene regulates gene",
-        "GpMF": "Gene has molecular function",
-        "AeG": "Anatomy expresses gene",
-        "GpBP": "Gene participates biological process",
-        "GiG": "Gene interacts with gene",
-        "AuG": "Anatomy upregulates gene",
-        "DaG": "Disease associated gene",
-        "GpPW": "Gene participates pathway",
-        "GcG": "Gene codes for gene",
-        "AdG": "Anatomy downregulates gene",
-        "CcSE": "Compound causes side effect",
-        "GpCC": "Gene located cellular component",
-        "CdG": "Compound targets gene",
-        "DlA": "Disease localizes anatomy",
-        "DuG": "Disease upregulates gene",
-        "CuG": "Compound upregulates gene",
-        "DpS": "Disease presents symptom",
-        "CbG": "Compound binds gene",
-        "CrC": "Compound reacts compound",
-        "DdG": "Disease downregulates gene",
-        "PCiC": "Pharmacologic class includes compound",
-        "CtD": "Compound treats disease",
-        "DrD": "Disease related to disease",
-        "CpD": "Compound predisposes disease"
+{   
+    "Examples": [
+		["Gene::11344","Gene→regulates→Gene","Gene::7485"],
+		["Gene::55186","Gene–participates–Molecular Function","Molecular_Function::GO:0022857"],
+		["Anatomy::UBERON:0001296","Anatomy–expresses–Gene","Gene::22845"],
+		["Gene::902","Gene–participates–Biological Process","Biological_Process::GO:0000278"],
+		["Gene::3676","Gene–interacts–Gene","Gene::27316"],
+		["Anatomy::UBERON:0002037","Anatomy–upregulates–Gene","Gene::1954"],
+		["Disease::DOID:2986","Disease–associates–Gene","Gene::3838"],
+		["Gene::10498","Gene–participates–Pathway","Pathway::PC7_5326"],
+		["Gene::84248","Gene–covaries–Gene","Gene::282679"],
+		["Anatomy::UBERON:0001295","Anatomy–downregulates–Gene","Gene::64518"],
+		["Compound::DB00523","Compound–causes–Side Effect","Side_Effect::C0027769"],
+		["Gene::3105","Gene–participates–Cellular Component","Cellular_Component::GO:0005795"],
+		["Compound::DB00679","Compound–downregulates–Gene","Gene::9270"],
+		["Disease::DOID:1686","Disease–localizes–Anatomy","Anatomy::UBERON:0001711"],
+		["Disease::DOID:7148","Disease–upregulates–Gene","Gene::26136"],
+		["Compound::DB00253","Compound–upregulates–Gene","Gene::54541"],
+		["Disease::DOID:2841","Disease–presents–Symptom","Symptom::D000860"],
+		["Compound::DB00398","Compound–binds–Gene","Gene::1244"],
+		["Compound::DB01607","Compound–resembles–Compound","Compound::DB01061"],
+		["Disease::DOID:2986","Disease–downregulates–Gene","Gene::81566"],
+		["Pharmacologic_Class::N0000185504","Pharmacologic Class–includes–Compound","Compound::DB01118"],
+		["Compound::DB00570","Compound–treats–Disease","Disease::DOID:1324"],
+		["Disease::DOID:7147","Disease–resembles–Disease","Disease::DOID:8893"],
+		["Compound::DB00621","Compound–palliates–Disease","Disease::DOID:11476"]
+	],
+    "cleaned_inverse_relations": {
+        "Gr>G": "regulated by",
+        "GpMF": "involved in molecular function",
+        "AeG": "expressed in",
+        "GpBP": "involved in biological process",
+        "GiG": "interacted by",
+        "AuG": "upregulated by",
+        "DaG": "associated with disease",
+        "GpPW": "involved in pathway",
+        "GcG": "covaried by",
+        "AdG": "downregulated by",
+        "CcSE": "caused by compound",
+        "GpCC": "involved in cellular component",
+        "CdG": "downregulated by compound",
+        "DlA": "localized in",
+        "DuG": "upregulated by disease",
+        "CuG": "upregulated by compound",
+        "DpS": "presented by",
+        "CbG": "bound by",
+        "CrC": "resembled by",
+        "DdG": "downregulated by disease",
+        "PCiC": "included in pharmacologic class",
+        "CtD": "treated by",
+        "DrD": "resembled by disease",
+        "CpD": "palliated by"
     },
-    "relation_descriptions": {
-        "Gr>G": [
-            "gene regulates gene",
-            "gene regulated by gene"
-        ],
-        "GpMF": [
-            "gene has molecular function",
-            "molecular function of gene"
-        ],
-        "AeG": [
-            "anatomy expresses gene",
-            "gene expressed in anatomy"
-        ],
-        "GpBP": [
-            "gene participates biological process",
-            "biological process involves gene"
-        ],
-        "GiG": [
-            "gene interacts with gene",
-            "gene interacts with gene"
-        ],
-        "AuG": [
-            "anatomy upregulates gene",
-            "gene upregulated by anatomy"
-        ],
-        "DaG": [
-            "disease associated gene",
-            "gene associated with disease"
-        ],
-        "GpPW": [
-            "gene participates pathway",
-            "pathway involves gene"
-        ],
-        "GcG": [
-            "gene codes for gene",
-            "gene coded by gene"
-        ],
-        "AdG": [
-            "anatomy downregulates gene",
-            "gene downregulated by anatomy"
-        ],
-        "CcSE": [
-            "compound causes side effect",
-            "side effect caused by compound"
-        ],
-        "GpCC": [
-            "gene located cellular component",
-            "cellular component contains gene"
-        ],
-        "CdG": [
-            "compound targets gene",
-            "gene targeted by compound"
-        ],
-        "DlA": [
-            "disease localizes anatomy",
-            "anatomy localized by disease"
-        ],
-        "DuG": [
-            "disease upregulates gene",
-            "gene upregulated by disease"
-        ],
-        "CuG": [
-            "compound upregulates gene",
-            "gene upregulated by compound"
-        ],
-        "DpS": [
-            "disease presents symptom",
-            "symptom presented by disease"
-        ],
-        "CbG": [
-            "compound binds gene",
-            "gene bound by compound"
-        ],
-        "CrC": [
-            "compound reacts compound",
-            "compound reacts compound"
-        ],
-        "DdG": [
-            "disease downregulates gene",
-            "gene downregulated by disease"
-        ],
-        "PCiC": [
-            "pharmacologic class includes compound",
-            "compound included in pharmacologic class"
-        ],
-        "CtD": [
-            "compound treats disease",
-            "disease treated by compound"
-        ],
-        "DrD": [
-            "disease related to disease",
-            "disease related to disease"
-        ],
-        "CpD": [
-            "compound predisposes disease",
-            "disease predisposed by compound"
-        ]
+    "inverse_relations_descriptions": {
+        "Gr>G": "regulated entity",
+        "GpMF": "molecular function involvement",
+        "AeG": "gene expression site",
+        "GpBP": "biological process involvement",
+        "GiG": "gene interaction",
+        "AuG": "gene upregulation",
+        "DaG": "gene association",
+        "GpPW": "pathway involvement",
+        "GcG": "gene covariance",
+        "AdG": "gene downregulation",
+        "CcSE": "side effect cause",
+        "GpCC": "cellular component involvement",
+        "CdG": "compound downregulation",
+        "DlA": "anatomy localization",
+        "DuG": "disease upregulation",
+        "CuG": "compound upregulation",
+        "DpS": "symptom presentation",
+        "CbG": "gene binding",
+        "CrC": "compound resemblance",
+        "DdG": "disease downregulation",
+        "PCiC": "pharmacologic class inclusion",
+        "CtD": "disease treatment",
+        "DrD": "disease resemblance",
+        "CpD": "disease palliation"
     }
 }
