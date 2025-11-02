@@ -4,6 +4,137 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 import os
 
+class SimilarityBasedRelationEnhancer(nn.Module):
+    """
+    基于余弦相似度的关系增强模块
+    根据查询关系与所有关系的相似度，加权参考相似关系来增强查询关系表示
+    """
+    
+    def __init__(self, embedding_dim=64, similarity_threshold_init=0.5, enhancement_strength_init=0.05):
+        super(SimilarityBasedRelationEnhancer, self).__init__()
+        
+        self.embedding_dim = embedding_dim
+        
+        # 可学习的相似度阈值（经过sigmoid后映射到0-1范围）
+        self.similarity_threshold_raw = nn.Parameter(torch.tensor(similarity_threshold_init * 2.0 - 1.0))
+        
+        # 可学习的增强强度参数（经过sigmoid后映射到0-0.2范围，保持较小以避免过度影响）
+        self.enhancement_strength_raw = nn.Parameter(torch.tensor(enhancement_strength_init * 5.0 - 1.0))
+        
+        # 可学习的相似度加权参数（用于调整相似度对权重的影响）
+        self.similarity_weight_scale = nn.Parameter(torch.tensor(1.0))
+        
+        # 可学习的温度参数（用于softmax缩放，控制相似度分布的平滑度）
+        self.temperature = nn.Parameter(torch.tensor(1.0))
+    
+    def get_similarity_threshold(self):
+        """获取当前的可学习阈值（sigmoid映射到0-1）"""
+        return torch.sigmoid(self.similarity_threshold_raw)
+    
+    def get_enhancement_strength(self):
+        """获取当前的可学习增强强度（sigmoid映射到0-0.2）"""
+        return torch.sigmoid(self.enhancement_strength_raw) * 0.2
+    
+    def forward(self, final_relation_representations, query_rels):
+        """
+        基于相似度增强关系表示
+        
+        Args:
+            final_relation_representations: [batch_size, num_relations, embedding_dim]
+            query_rels: [batch_size] 查询关系索引
+        
+        Returns:
+            enhanced_representations: [batch_size, num_relations, embedding_dim]
+        """
+        batch_size, num_relations, embedding_dim = final_relation_representations.shape
+        device = final_relation_representations.device
+        
+        # 获取可学习参数
+        threshold = self.get_similarity_threshold()
+        strength = self.get_enhancement_strength()
+        temp = torch.clamp(self.temperature, min=0.1, max=10.0)  # 限制温度范围
+        
+        # 初始化增强后的表示
+        enhanced_reprs = final_relation_representations.clone()
+        
+        for i in range(batch_size):
+            query_rel_idx = query_rels[i].item()
+            if query_rel_idx >= num_relations or query_rel_idx < 0:
+                continue
+            
+            # 获取查询关系的表示
+            query_rel_repr = final_relation_representations[i, query_rel_idx, :]  # [embedding_dim]
+            
+            # 获取所有关系的表示
+            all_rel_reprs = final_relation_representations[i, :, :]  # [num_relations, embedding_dim]
+            
+            # 计算与所有关系的余弦相似度
+            # 归一化
+            query_norm = F.normalize(query_rel_repr, p=2, dim=0)  # [embedding_dim]
+            all_norms = F.normalize(all_rel_reprs, p=2, dim=1)  # [num_relations, embedding_dim]
+            
+            # 计算余弦相似度 (使用矩阵乘法更高效)
+            similarities = torch.matmul(query_norm.unsqueeze(0), all_norms.t()).squeeze(0)  # [num_relations]
+            
+            # 排除查询关系本身（设置为-1，确保不被选择）
+            similarities[query_rel_idx] = -1.0
+            
+            # 找到相似度大于阈值的关系
+            # 使用soft thresholding让阈值也参与梯度计算（使用sigmoid平滑）
+            # 这比硬阈值更好，因为可以计算梯度
+            threshold_scaled = threshold.unsqueeze(0).expand_as(similarities)  # [num_relations]
+            # 使用sigmoid实现平滑的阈值过滤，保留梯度
+            # similarity_weight = sigmoid((similarity - threshold) * temperature_scale)
+            # 这样相似度高的会有较大权重，相似度低的会有较小权重
+            similarity_weights = torch.sigmoid((similarities - threshold) * 10.0)  # [num_relations]
+            
+            # 找到权重足够大的关系（>0.5相当于相似度>阈值）
+            above_threshold = similarity_weights > 0.5
+            valid_indices = torch.where(above_threshold)[0]
+            
+            if len(valid_indices) == 0:
+                # 如果没有超过阈值的，保持原样
+                continue
+            
+            # 使用平滑的权重而不是硬阈值
+            valid_similarities_raw = similarities[valid_indices]  # [num_valid]
+            valid_weights_smooth = similarity_weights[valid_indices]  # [num_valid]
+            
+            # 获取有效关系的表示
+            valid_reprs = all_rel_reprs[valid_indices, :]  # [num_valid, embedding_dim]
+            
+            # 使用有效关系的相似度和平滑权重
+            valid_similarities = valid_similarities_raw  # [num_valid]
+            
+            # 使用softmax根据相似度加权（应用温度参数）
+            # 相似度越高，权重越大
+            scaled_similarities = valid_similarities / temp
+            weights = F.softmax(scaled_similarities, dim=0)  # [num_valid]
+            
+            # 结合平滑的阈值权重（让阈值也参与梯度计算）
+            # weights来自softmax（基于相似度），valid_weights_smooth来自阈值过滤
+            combined_weights = weights * valid_weights_smooth  # [num_valid]
+            
+            # 进一步根据相似度强度调整权重（可学习的缩放因子）
+            adjusted_weights = combined_weights * (1.0 + self.similarity_weight_scale * valid_similarities)  # [num_valid]
+            adjusted_weights = adjusted_weights / (adjusted_weights.sum() + 1e-8)  # 重新归一化 [num_valid]
+            
+            # 计算加权平均的相似关系表示
+            # valid_reprs: [num_valid, embedding_dim], adjusted_weights: [num_valid]
+            # [num_valid, embedding_dim] * [num_valid, 1] -> [embedding_dim]
+            weighted_similar_repr = torch.sum(valid_reprs * adjusted_weights.unsqueeze(1), dim=0)  # [embedding_dim]
+            
+            # 应用增强：使用小的增强强度，保持对原模型的最小影响
+            # enhanced = original + strength * (weighted_similar - original)
+            # 这等价于：enhanced = (1 - strength) * original + strength * weighted_similar
+            enhanced_query_repr = (1.0 - strength) * query_rel_repr + strength * weighted_similar_repr
+            
+            # 更新查询关系的表示
+            enhanced_reprs[i, query_rel_idx, :] = enhanced_query_repr
+        
+        return enhanced_reprs
+
+
 class OptimizedPromptGraph(nn.Module):
     """
     优化版自适应提示图增强模块
@@ -157,11 +288,18 @@ class EnhancedUltra(nn.Module):
             self.semantic_model = SemRelNBFNet(**sem_model_cfg)
             self.combiner = CombineEmbeddings(embedding_dim=64)
         
-        # 提示图增强模块
+        # 提示图增强模块（保留原有功能）
         self.prompt_enhancer = OptimizedPromptGraph(
             embedding_dim=64,
             max_hops=2,  # 减少跳数
             num_prompt_samples=3  # 减少样本数
+        )
+        
+        # 基于相似度的关系增强模块（新增）
+        self.similarity_enhancer = SimilarityBasedRelationEnhancer(
+            embedding_dim=64,
+            similarity_threshold_init=0.5,  # 初始阈值0.5
+            enhancement_strength_init=0.05   # 初始增强强度0.05，保持较小以避免过度影响
         )
         
         # 存储表示
@@ -192,20 +330,15 @@ class EnhancedUltra(nn.Module):
             self.relation_representations_structural = self.relation_model(data, query=query_rels)
             self.final_relation_representations = self.relation_representations_structural
         
-        # 革命性增强策略
-        if not self.training:  # 只在推理时使用
-            self.enhanced_relation_representations = self._revolutionary_enhancement(
-                data, batch, query_rels_traverse
-            )
-        else:
-            self.enhanced_relation_representations = self.final_relation_representations
+        # 基于相似度的关系增强策略
+        # 在训练和推理时都使用，但强度较小，不会过度影响原模型
+        self.enhanced_relation_representations = self.similarity_enhancer(
+            self.final_relation_representations, 
+            query_rels
+        )
         
-        # 革命性增强：使用增强后的关系表示
+        # 使用增强后的关系表示进行实体推理
         score = self.entity_model(data, self.enhanced_relation_representations, batch)
-        
-        # 后处理增强：对最终得分进行智能调整
-        if not self.training:
-            score = self._post_process_enhancement(score, data, batch)
         
         return score
     
@@ -328,8 +461,8 @@ class EnhancedUltra(nn.Module):
         return torch.stack(enhanced_queries, dim=0)
     
     def _revolutionary_enhancement(self, data, batch, query_rels_traverse):
-        """简化增强：避免索引越界问题"""
-        # 直接返回原始表示，避免复杂的索引操作
+        """基于相似度的关系增强（已弃用，现在使用similarity_enhancer）"""
+        # 这个方法保留是为了向后兼容，实际已使用similarity_enhancer
         return self.final_relation_representations
     
     def _get_relation_frequency(self, data, rel_id):
@@ -360,11 +493,7 @@ class EnhancedUltra(nn.Module):
     
     
     def _post_process_enhancement(self, score, data, batch):
-        """超安全调参：只使用全局提升避免所有索引越界"""
-        enhanced_score = score.clone()
-        
-        # 只做全局提升，避免所有复杂的索引操作
-        enhanced_score *= 3.0  # 提升到3.0，超激进的全局增强
-        
-        return enhanced_score
+        """后处理增强（已弃用，现在通过相似度增强模块完成）"""
+        # 这个方法保留是为了向后兼容，实际增强已在前面的similarity_enhancer中完成
+        return score
     

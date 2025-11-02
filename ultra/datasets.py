@@ -1304,18 +1304,126 @@ class TransductiveDataset(InMemoryDataset):
         self.data, self.slices = torch.load(self.processed_paths[0])
 
     @property
+    def raw_dir(self):
+        """返回 raw 目录路径，使用子类的 name 属性，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                raw_dir_from_flags = os.path.join(kg_datasets_path, self.name, "raw")
+                if os.path.exists(raw_dir_from_flags):
+                    return raw_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, self.name, "raw")
+            except:
+                pass
+        
+        # 默认使用 self.root
+        return os.path.join(self.root, self.name, "raw")
+
+    @property
     def raw_file_names(self):
         return ["train.txt", "valid.txt", "test.txt"]
     
     def download(self):
+        # 优先检查本地文件，如果所有文件都已存在则直接返回，不进行任何下载
+        # 直接使用 flags 中配置的绝对路径来查找文件
+        try:
+            # 优先使用 flags.kg_datasets_path
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                raw_dir_from_flags = os.path.join(kg_datasets_path, self.name, "raw")
+                raw_file_names = self.raw_file_names
+                raw_paths_from_flags = [os.path.join(raw_dir_from_flags, fname) for fname in raw_file_names]
+                
+                # 检查所有文件是否存在
+                print(f"Checking for raw files in: {raw_dir_from_flags}")
+                all_files_exist = True
+                for path in raw_paths_from_flags:
+                    exists = os.path.exists(path)
+                    if not exists:
+                        all_files_exist = False
+                        print(f"  ✗ Missing: {path}")
+                    else:
+                        print(f"  ✓ Exists: {path}")
+                
+                if all_files_exist:
+                    print(f"\n✓ All raw files already exist, using local files. Skipping download.\n")
+                    return
+        except Exception as e:
+            print(f"Warning: Could not use flags.kg_datasets_path: {e}")
+        
+        # 如果 flags 路径不可用，尝试使用 base_path
+        try:
+            base_path = getattr(flags, 'base_path', None)
+            if base_path and os.path.exists(base_path):
+                root_normalized = self.root.lstrip('./') if self.root.startswith('./') else self.root
+                kg_datasets_abs = os.path.join(base_path, root_normalized)
+                if os.path.exists(kg_datasets_abs):
+                    raw_dir_abs = os.path.join(kg_datasets_abs, self.name, "raw")
+                    raw_file_names = self.raw_file_names
+                    raw_paths_abs = [os.path.join(raw_dir_abs, fname) for fname in raw_file_names]
+                    
+                    print(f"Checking for raw files in: {raw_dir_abs}")
+                    all_files_exist = True
+                    for path in raw_paths_abs:
+                        exists = os.path.exists(path)
+                        if not exists:
+                            all_files_exist = False
+                            print(f"  ✗ Missing: {path}")
+                        else:
+                            print(f"  ✓ Exists: {path}")
+                    
+                    if all_files_exist:
+                        print(f"\n✓ All raw files already exist, using local files. Skipping download.\n")
+                        return
+        except Exception as e:
+            print(f"Warning: Could not use flags.base_path: {e}")
+        
+        # 最后尝试使用原始的 raw_paths（转换为绝对路径）
+        raw_dir = self.raw_dir
+        raw_paths = self.raw_paths
+        raw_dir_abs = os.path.abspath(raw_dir)
+        raw_paths_abs = [os.path.abspath(path) for path in raw_paths]
+        
+        print(f"Checking for raw files in: {raw_dir} (abs: {raw_dir_abs})")
+        
+        all_files_exist = True
+        for path, path_abs in zip(raw_paths, raw_paths_abs):
+            exists = os.path.exists(path_abs)
+            if not exists:
+                all_files_exist = False
+                print(f"  ✗ Missing: {path_abs}")
+            else:
+                print(f"  ✓ Exists: {path_abs}")
+        
+        if all_files_exist:
+            print(f"\n✓ All raw files already exist, using local files. Skipping download.\n")
+            return
+        
+        print(f"\nSome files are missing, proceeding with download...\n")
+        
         import time
         import ssl
         import urllib.request
         from urllib.error import URLError
         
         for url, path in zip(self.urls, self.raw_paths):
-            # Check if file already exists
-            if os.path.exists(path):
+            # Check if file already exists (使用绝对路径检查)
+            path_abs = os.path.abspath(path)
+            if os.path.exists(path_abs):
                 print(f"✓ File {os.path.basename(path)} already exists, skipping download.")
                 continue
             
@@ -1518,8 +1626,36 @@ class TransductiveDataset(InMemoryDataset):
     
     # default loading procedure: process train/valid/test files, create graphs from them
     def process(self):
-
-        train_files = self.raw_paths[:3]
+        # 使用绝对路径来构建文件路径列表
+        raw_file_names = self.raw_file_names[:3]  # train.txt, valid.txt, test.txt
+        
+        # 优先使用 flags 中配置的绝对路径
+        train_files = []
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                raw_dir_from_flags = os.path.join(kg_datasets_path, self.name, "raw")
+                train_files = [os.path.join(raw_dir_from_flags, fname) for fname in raw_file_names]
+            else:
+                raise ValueError("kg_datasets_path not available")
+        except:
+            # 备选：使用 base_path
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    root_normalized = self.root.lstrip('./') if self.root.startswith('./') else self.root
+                    kg_datasets_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(kg_datasets_abs):
+                        raw_dir_abs = os.path.join(kg_datasets_abs, self.name, "raw")
+                        train_files = [os.path.join(raw_dir_abs, fname) for fname in raw_file_names]
+                    else:
+                        raise ValueError("kg_datasets_abs not exists")
+                else:
+                    raise ValueError("base_path not available")
+            except:
+                # 最后使用原始的 raw_paths（转换为绝对路径）
+                raw_paths = self.raw_paths[:3]
+                train_files = [os.path.abspath(path) for path in raw_paths]
 
         train_results = self.load_file(train_files[0], inv_entity_vocab={}, inv_rel_vocab={})
         valid_results = self.load_file(train_files[1], 
