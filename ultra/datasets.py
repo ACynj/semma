@@ -2212,8 +2212,36 @@ class DBpedia100k(TransductiveDataset):
     name = "dbp100k"
 
     def process(self):
-
-        train_files = self.raw_paths[:3]
+        # 使用绝对路径来构建文件路径列表
+        raw_file_names = self.raw_file_names[:3]  # train.txt, valid.txt, test.txt
+        
+        # 优先使用 flags 中配置的绝对路径
+        train_files = []
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                raw_dir_from_flags = os.path.join(kg_datasets_path, self.name, "raw")
+                train_files = [os.path.join(raw_dir_from_flags, fname) for fname in raw_file_names]
+            else:
+                raise ValueError("kg_datasets_path not available")
+        except:
+            # 备选：使用 base_path
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    root_normalized = self.root.lstrip('./') if self.root.startswith('./') else self.root
+                    kg_datasets_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(kg_datasets_abs):
+                        raw_dir_abs = os.path.join(kg_datasets_abs, self.name, "raw")
+                        train_files = [os.path.join(raw_dir_abs, fname) for fname in raw_file_names]
+                    else:
+                        raise ValueError("kg_datasets_abs not exists")
+                else:
+                    raise ValueError("base_path not available")
+            except:
+                # 最后使用原始的 raw_paths（转换为绝对路径）
+                raw_paths = self.raw_paths[:3]
+                train_files = [os.path.abspath(path) for path in raw_paths]
 
         train_results = self.load_file(train_files[0], inv_entity_vocab={}, inv_rel_vocab={})
         valid_results = self.load_file(train_files[1], 

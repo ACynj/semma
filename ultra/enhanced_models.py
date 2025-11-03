@@ -10,7 +10,7 @@ class SimilarityBasedRelationEnhancer(nn.Module):
     根据查询关系与所有关系的相似度，加权参考相似关系来增强查询关系表示
     """
     
-    def __init__(self, embedding_dim=64, similarity_threshold_init=0.5, enhancement_strength_init=0.05):
+    def __init__(self, embedding_dim=64, similarity_threshold_init=0.8, enhancement_strength_init=0.05):
         super(SimilarityBasedRelationEnhancer, self).__init__()
         
         self.embedding_dim = embedding_dim
@@ -298,7 +298,7 @@ class EnhancedUltra(nn.Module):
         # 基于相似度的关系增强模块（新增）
         self.similarity_enhancer = SimilarityBasedRelationEnhancer(
             embedding_dim=64,
-            similarity_threshold_init=0.5,  # 初始阈值0.5
+            similarity_threshold_init=0.8,  # 初始阈值0.5
             enhancement_strength_init=0.05   # 初始增强强度0.05，保持较小以避免过度影响
         )
         

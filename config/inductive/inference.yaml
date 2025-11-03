@@ -1,8 +1,8 @@
-output_dir: output/ 
+output_dir: ./semma_output/ 
 
 dataset:
   class: {{ dataset }}
-  root: kg-datasets/
+  root: /T20030104/ynj/semma/kg-datasets/
   version: {{ version }}
 
 model:
