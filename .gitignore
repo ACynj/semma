@@ -12,3 +12,7 @@
 
 # 缓存目录
 /cache/
+
+/kg-datasets/
+
+/semma_output/
