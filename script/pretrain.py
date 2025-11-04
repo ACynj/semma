@@ -296,34 +296,7 @@ if __name__ == "__main__":
 
     if "checkpoint" in cfg:
         state = torch.load(cfg.checkpoint, map_location="cpu")
-        try:
-            model.load_state_dict(state["model"])
-        except RuntimeError as e:
-            if "Missing key(s)" in str(e) or "Unexpected key(s)" in str(e):
-                logger.warning("Checkpoint与模型不完全匹配，尝试部分加载...")
-                model_dict = model.state_dict()
-                checkpoint_dict = state["model"]
-                
-                # 只加载匹配的键
-                filtered_dict = {k: v for k, v in checkpoint_dict.items() if k in model_dict}
-                missing_keys = set(model_dict.keys()) - set(filtered_dict.keys())
-                unexpected_keys = set(checkpoint_dict.keys()) - set(filtered_dict.keys())
-                
-                if unexpected_keys:
-                    logger.warning(f"Checkpoint中的额外键（将被忽略）: {len(unexpected_keys)}个")
-                if missing_keys:
-                    logger.warning(f"模型中的缺失键（将使用随机初始化）: {len(missing_keys)}个")
-                    for key in list(missing_keys)[:5]:  # 只显示前5个
-                        logger.warning(f"  - {key}")
-                    if len(missing_keys) > 5:
-                        logger.warning(f"  ... 还有 {len(missing_keys) - 5} 个")
-                
-                # 更新匹配的部分
-                model_dict.update(filtered_dict)
-                model.load_state_dict(model_dict)
-                logger.warning("部分加载完成，新参数将使用随机初始化")
-            else:
-                raise e
+        model.load_state_dict(state["model"])
 
     model = model.to(device)
     
