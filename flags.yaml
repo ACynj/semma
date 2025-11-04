@@ -1,4 +1,4 @@
-run: EnhancedUltra # [ultra, semma, EnhancedUltra] Model type to use
+run: semma # [ultra, semma, EnhancedUltra] Model type to use
 LLM: gpt4o # [gpt4o, qwen3-32b, deepseekv3]
 rg2_embedding: combined-sum # ["combined", "combined-sum", "no llm", "llm name", "llm description"]
 k: 0 # should be positive if you want to add specific num of 5th type edges to each relation

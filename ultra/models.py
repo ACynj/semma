@@ -406,21 +406,27 @@ class SemRelNBFNet(BaseNBFNet):
         index = h_index.unsqueeze(-1).expand_as(query)
 
         embedding = relation_embeddings
-        if(flags.model_embed != "jinaai"):
-            reduced_embedding = self.embedding_reducer(embedding)
+        if embedding is not None:
+            if(flags.model_embed != "jinaai"):
+                reduced_embedding = self.embedding_reducer(embedding)
+            else:
+                reduced_embedding = embedding
         else:
-            reduced_embedding = embedding
+            # 如果 relation_embeddings 为 None，创建一个零向量作为占位符
+            reduced_embedding = None
 
         # initial (boundary) condition - initialize all node states as zeros
         boundary = torch.zeros(batch_size, data.num_nodes, self.dims[0], device=h_index.device)
         
-        # Handle the case where reduced_embedding has fewer elements than num_nodes
-        num_relations = reduced_embedding.shape[0]
-        valid_indices = torch.arange(min(num_relations, data.num_nodes), device=reduced_embedding.device)
+        # 只有当 reduced_embedding 不为 None 时才填充边界条件
+        if reduced_embedding is not None:
+            # Handle the case where reduced_embedding has fewer elements than num_nodes
+            num_relations = reduced_embedding.shape[0]
+            valid_indices = torch.arange(min(num_relations, data.num_nodes), device=reduced_embedding.device)
 
-        # Populate the boundary tensor for all batches in parallel
-        # Only assign embeddings for valid relation indices
-        boundary[:, valid_indices] = reduced_embedding[:len(valid_indices)].unsqueeze(0)
+            # Populate the boundary tensor for all batches in parallel
+            # Only assign embeddings for valid relation indices
+            boundary[:, valid_indices] = reduced_embedding[:len(valid_indices)].unsqueeze(0)
         # print("====================================")
         # print(valid_indices.shape)
         # print(valid_indices)
@@ -503,9 +509,63 @@ class SemRelNBFNet(BaseNBFNet):
         if flags.harder_setting == True:
             rel_graph = graph
         else:
-            rel_graph = graph.relation_graph2
+            # 检查 relation_graph2 是否存在，如果不存在则动态创建
+            if not hasattr(graph, 'relation_graph2') or graph.relation_graph2 is None:
+                # 如果 relation_graph2 不存在，尝试动态构建
+                # 需要 dataset_name，从 graph 的属性中获取
+                dataset_name = getattr(graph, 'dataset', None)
+                if dataset_name is None:
+                    # 尝试从其他可能的属性中获取
+                    dataset_name = getattr(graph, 'name', 'Unknown')
+                
+                # 检查必要的属性是否存在
+                required_attrs = ['edge2id', 'edge_index', 'edge_type', 'num_nodes', 'num_relations']
+                missing_attrs = [attr for attr in required_attrs if not hasattr(graph, attr)]
+                
+                if missing_attrs:
+                    # 如果缺少必要属性，创建一个最小化的 relation_graph2
+                    # 而不是回退到 relation_graph，因为结构不匹配
+                    num_rels = getattr(graph, 'num_relations', 0)
+                    device = graph.edge_index.device if hasattr(graph, 'edge_index') else query.device
+                    
+                    # 创建一个空的 relation_graph2（没有语义相似的边）
+                    from torch_geometric.data import Data
+                    empty_rel_graph2 = Data(
+                        edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                        edge_type=torch.empty((0,), dtype=torch.long, device=device),
+                        num_nodes=num_rels,
+                        num_relations=1,
+                        relation_embeddings=None
+                    )
+                    graph.relation_graph2 = empty_rel_graph2
+                    rel_graph = empty_rel_graph2
+                else:
+                    # 导入 build_relation_graph_exp 函数
+                    from ultra.tasks import build_relation_graph_exp
+                    try:
+                        graph = build_relation_graph_exp(graph, dataset_name=dataset_name)
+                        # 构建成功后，relation_graph2 应该已经存在
+                        if not hasattr(graph, 'relation_graph2') or graph.relation_graph2 is None:
+                            raise AttributeError("build_relation_graph_exp did not create relation_graph2")
+                        rel_graph = graph.relation_graph2
+                    except Exception as e:
+                        # 如果构建失败，创建一个最小化的 relation_graph2
+                        num_rels = graph.num_relations
+                        device = graph.edge_index.device
+                        from torch_geometric.data import Data
+                        empty_rel_graph2 = Data(
+                            edge_index=torch.empty((2, 0), dtype=torch.long, device=device),
+                            edge_type=torch.empty((0,), dtype=torch.long, device=device),
+                            num_nodes=num_rels,
+                            num_relations=1,
+                            relation_embeddings=None
+                        )
+                        graph.relation_graph2 = empty_rel_graph2
+                        rel_graph = empty_rel_graph2
+            else:
+                rel_graph = graph.relation_graph2
         # message passing and updated node representations (that are in fact relations)
-        if hasattr(rel_graph, "relation_embeddings"):
+        if hasattr(rel_graph, "relation_embeddings") and rel_graph.relation_embeddings is not None:
             output = self.bellmanford(rel_graph, h_index=query, relation_embeddings=rel_graph.relation_embeddings)["node_feature"]  # (batch_size, num_nodes, hidden_dim）
         else:
             output = self.bellmanford(rel_graph, h_index=query, relation_embeddings=None)["node_feature"]  # (batch_size, num_nodes, hidden_dim）
