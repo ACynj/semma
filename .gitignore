@@ -16,3 +16,10 @@
 /kg-datasets/
 
 /semma_output/
+
+/*_output/
+
+/*.log
+/*.txt 
+/*.sh
+
