@@ -1,4 +1,4 @@
-output_dir: ./v2_output/ 
+output_dir: ./v3_vip_output/ 
 
 dataset:
   class: {{ dataset }}

@@ -10,7 +10,7 @@ class SimilarityBasedRelationEnhancer(nn.Module):
     根据查询关系与所有关系的相似度，加权参考相似关系来增强查询关系表示
     """
     
-    def __init__(self, embedding_dim=64, similarity_threshold_init=0.85, enhancement_strength_init=0.025):
+    def __init__(self, embedding_dim=64, similarity_threshold_init=0.8, enhancement_strength_init=0.05):
         super(SimilarityBasedRelationEnhancer, self).__init__()
         
         self.embedding_dim = embedding_dim
@@ -298,8 +298,8 @@ class EnhancedUltra(nn.Module):
         # 基于相似度的关系增强模块（新增）
         self.similarity_enhancer = SimilarityBasedRelationEnhancer(
             embedding_dim=64,
-            similarity_threshold_init=0.85,  # 初始阈值0.5
-            enhancement_strength_init=0.025   # 初始增强强度0.05，保持较小以避免过度影响
+            similarity_threshold_init=0.8,  # 初始阈值0.5
+            enhancement_strength_init=0.05   # 初始增强强度0.05，保持较小以避免过度影响
         )
         
         # 存储表示
@@ -373,7 +373,7 @@ class EnhancedUltra(nn.Module):
                 # 计算全局平均
                 global_context = self.final_relation_representations.mean(dim=0)
                 # 非常轻微的增强
-                enhanced_repr = base_repr + 0.025 * global_context
+                enhanced_repr = base_repr + 0.05 * global_context
             else:
                 enhanced_repr = base_repr
             
@@ -382,7 +382,7 @@ class EnhancedUltra(nn.Module):
             enhanced_repr += noise
             
             # 策略3: 残差保护 - 确保不偏离太远
-            enhanced_repr = 0.975 * enhanced_repr + 0.025 * base_repr
+            enhanced_repr = 0.95 * enhanced_repr + 0.05 * base_repr
             
             enhanced_reprs.append(enhanced_repr)
 

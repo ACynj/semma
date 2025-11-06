@@ -1,8 +1,9 @@
-output_dir: ./v3_vip_output/ 
+output_dir: ./output 
 
 dataset:
-  class: {{ dataset }}
-  root: /T20030104/ynj/semma/kg-datasets/
+  class: JointDataset
+  graphs: [FB15k237, WN18RR, CoDExMedium]
+  root: ./kg-datasets/
 
 model:
   class: Ultra
@@ -32,11 +33,11 @@ model:
     layer_norm: yes
 
 task:
-  name: TransductiveInference
-  num_negative: 256
+  name: MultiGraphPretraining
+  num_negative: 128
   strict_negative: yes
   adversarial_temperature: 1
-  metric: [mr-tail, mrr-tail, hits@1-tail, hits@3-tail, hits@10-tail, hits@10_50-tail]
+  metric: [mr, mrr, hits@1, hits@3, hits@10]
 
 optimizer:
   class: AdamW
@@ -45,8 +46,8 @@ optimizer:
 train:
   gpus: {{ gpus }}
   batch_size: 64
-  num_epoch: {{ epochs }}
-  log_interval: 100
-  batch_per_epoch: {{ bpe }}
-
-checkpoint: {{ ckpt }}
+  num_epoch: 10
+  log_interval: 200
+  batch_per_epoch: 20000
+  fast_test: 500
+  #logger: wandb
