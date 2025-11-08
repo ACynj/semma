@@ -20,6 +20,11 @@ class RDGConfig:
     normalize_weights: bool = True  # Whether to normalize dependency weights
     include_multi_hop: bool = False  # Whether to include multi-hop dependencies
     max_path_length: int = 2  # Maximum path length for multi-hop dependencies
+    # Semantic enhancement settings
+    use_semantic_enhancement: bool = False  # Whether to use semantic information to enhance RDG
+    semantic_similarity_threshold: float = 0.5  # Minimum semantic similarity to keep an edge
+    semantic_weight_alpha: float = 0.5  # Weight for combining structural and semantic: (1-alpha)*structural + alpha*semantic
+    semantic_filter_mode: str = 'filter'  # 'filter': filter by threshold, 'weight': weight by similarity, 'both': filter and weight
 
 
 def extract_relation_dependencies(
@@ -228,6 +233,157 @@ def build_rdg_edges(
     
     # Extract dependency edges
     dependency_edges = extract_relation_dependencies(graph, config)
+    
+    if not dependency_edges:
+        # No dependencies found, return empty tensors
+        device = graph.edge_index.device
+        edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
+        edge_weights = torch.empty((0,), dtype=torch.float, device=device)
+        tau = {r: 0.5 for r in range(graph.num_relations)}
+        return edge_index, edge_weights, tau, dependency_edges
+    
+    # Compute precedence values
+    tau = compute_relation_precedence(
+        dependency_edges,
+        graph.num_relations,
+        config
+    )
+    
+    # Convert to tensors
+    device = graph.edge_index.device
+    edges_list = [(r_i, r_j) for r_i, r_j, _ in dependency_edges]
+    weights_list = [weight for _, _, weight in dependency_edges]
+    
+    edge_index = torch.tensor(edges_list, dtype=torch.long, device=device).T  # [2, num_edges]
+    edge_weights = torch.tensor(weights_list, dtype=torch.float, device=device)  # [num_edges]
+    
+    return edge_index, edge_weights, tau, dependency_edges
+
+
+def enhance_rdg_with_semantics(
+    dependency_edges: List[Tuple[int, int, float]],
+    semantic_similarity_matrix: torch.Tensor,
+    config: Optional[RDGConfig] = None
+) -> List[Tuple[int, int, float]]:
+    """
+    Enhance RDG dependency edges with semantic similarity information.
+    
+    This function combines structural dependencies with semantic similarities
+    to create a more robust relation dependency graph. It can:
+    1. Filter edges by semantic similarity threshold
+    2. Weight edges by semantic similarity
+    3. Both filter and weight
+    
+    Args:
+        dependency_edges: List of (r_i, r_j, structural_weight) tuples
+        semantic_similarity_matrix: [num_relations, num_relations] tensor of cosine similarities
+        config: RDG configuration (optional)
+    
+    Returns:
+        Enhanced list of (r_i, r_j, enhanced_weight) tuples
+    """
+    if config is None:
+        config = RDGConfig()
+    
+    if not config.use_semantic_enhancement:
+        return dependency_edges
+    
+    enhanced_edges = []
+    num_relations = semantic_similarity_matrix.size(0)
+    
+    for r_i, r_j, structural_weight in dependency_edges:
+        # Ensure indices are valid
+        if r_i >= num_relations or r_j >= num_relations:
+            continue
+        
+        # Get semantic similarity (cosine similarity is symmetric)
+        semantic_sim = semantic_similarity_matrix[r_i, r_j].item()
+        
+        # Normalize semantic similarity from [-1, 1] to [0, 1] for combination
+        # Using (semantic_sim + 1) / 2 to map to [0, 1]
+        normalized_semantic = (semantic_sim + 1.0) / 2.0
+        
+        if config.semantic_filter_mode == 'filter':
+            # Only keep edges above semantic similarity threshold
+            if normalized_semantic >= config.semantic_similarity_threshold:
+                enhanced_edges.append((r_i, r_j, structural_weight))
+        
+        elif config.semantic_filter_mode == 'weight':
+            # Weight edges by semantic similarity (always keep, but adjust weight)
+            # Combined weight: (1-alpha) * structural + alpha * semantic
+            enhanced_weight = (1.0 - config.semantic_weight_alpha) * structural_weight + \
+                            config.semantic_weight_alpha * normalized_semantic
+            enhanced_edges.append((r_i, r_j, enhanced_weight))
+        
+        elif config.semantic_filter_mode == 'both':
+            # Filter by threshold AND weight by similarity
+            if normalized_semantic >= config.semantic_similarity_threshold:
+                enhanced_weight = (1.0 - config.semantic_weight_alpha) * structural_weight + \
+                                config.semantic_weight_alpha * normalized_semantic
+                enhanced_edges.append((r_i, r_j, enhanced_weight))
+        
+        else:
+            raise ValueError(f"Unknown semantic_filter_mode: {config.semantic_filter_mode}")
+    
+    return enhanced_edges
+
+
+def build_semantic_enhanced_rdg_edges(
+    graph,
+    semantic_similarity_matrix: Optional[torch.Tensor] = None,
+    config: Optional[RDGConfig] = None
+) -> Tuple[torch.Tensor, torch.Tensor, Dict[int, float], List[Tuple[int, int, float]]]:
+    """
+    Build semantic-enhanced RDG edges and compute precedence values.
+    
+    This function combines structural relation dependencies with semantic similarity
+    information from SEMMA to create a more robust relation dependency graph.
+    
+    Args:
+        graph: Graph object with edge_index and edge_type
+        semantic_similarity_matrix: Optional [num_relations, num_relations] tensor of cosine similarities.
+                                   If None and use_semantic_enhancement=True, will try to get from graph.relation_graph2
+        config: RDG configuration (optional)
+    
+    Returns:
+        Tuple of:
+        - edge_index: [2, num_rdg_edges] tensor of dependency edges
+        - edge_weights: [num_rdg_edges] tensor of edge weights
+        - tau: Dictionary mapping relation_id -> precedence_value
+        - dependency_edges: List of (r_i, r_j, weight) tuples
+    """
+    if config is None:
+        config = RDGConfig()
+    
+    # Extract structural dependency edges
+    dependency_edges = extract_relation_dependencies(graph, config)
+    
+    # Enhance with semantic information if enabled
+    if config.use_semantic_enhancement:
+        # Try to get semantic similarity matrix
+        if semantic_similarity_matrix is None:
+            # Try to get from graph.relation_graph2 if available
+            if hasattr(graph, 'relation_graph2') and graph.relation_graph2 is not None:
+                if hasattr(graph.relation_graph2, 'relation_similarity_matrix'):
+                    semantic_similarity_matrix = graph.relation_graph2.relation_similarity_matrix
+                elif hasattr(graph.relation_graph2, 'relation_embeddings'):
+                    # Compute similarity matrix from embeddings
+                    embeddings = graph.relation_graph2.relation_embeddings
+                    import torch.nn.functional as F
+                    semantic_similarity_matrix = F.cosine_similarity(
+                        embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim=2
+                    )
+                else:
+                    print("[RDG] Warning: Semantic enhancement enabled but no semantic information found. Using structural RDG only.")
+                    config.use_semantic_enhancement = False
+            else:
+                print("[RDG] Warning: Semantic enhancement enabled but graph.relation_graph2 not available. Using structural RDG only.")
+                config.use_semantic_enhancement = False
+        
+        if config.use_semantic_enhancement and semantic_similarity_matrix is not None:
+            dependency_edges = enhance_rdg_with_semantics(
+                dependency_edges, semantic_similarity_matrix, config
+            )
     
     if not dependency_edges:
         # No dependencies found, return empty tensors

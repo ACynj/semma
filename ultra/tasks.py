@@ -612,18 +612,36 @@ def build_relation_graph(graph):
     rdg_enabled = hasattr(flags, 'use_rdg') and getattr(flags, 'use_rdg', False)
     if rdg_enabled:
         try:
-            from ultra.rdg import build_rdg_edges, RDGConfig
+            from ultra.rdg import build_rdg_edges, build_semantic_enhanced_rdg_edges, RDGConfig
+            
+            # Check if semantic enhancement is enabled
+            use_semantic_enhancement = getattr(flags, 'rdg_use_semantic_enhancement', False)
             
             # Create RDG configuration from flags
             rdg_config = RDGConfig(
                 enabled=True,
                 min_dependency_weight=getattr(flags, 'rdg_min_weight', 0.001),
                 precedence_method=getattr(flags, 'rdg_precedence_method', 'indegree'),
-                normalize_weights=getattr(flags, 'rdg_normalize_weights', True)
+                normalize_weights=getattr(flags, 'rdg_normalize_weights', True),
+                use_semantic_enhancement=use_semantic_enhancement,
+                semantic_similarity_threshold=getattr(flags, 'rdg_semantic_similarity_threshold', 0.5),
+                semantic_weight_alpha=getattr(flags, 'rdg_semantic_weight_alpha', 0.5),
+                semantic_filter_mode=getattr(flags, 'rdg_semantic_filter_mode', 'both')
             )
             
-            # Build RDG edges
-            rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_rdg_edges(graph, rdg_config)
+            # Build RDG edges (with or without semantic enhancement)
+            if use_semantic_enhancement:
+                # Get semantic similarity matrix if available
+                semantic_sim_matrix = None
+                if hasattr(graph, 'relation_graph2') and graph.relation_graph2 is not None:
+                    if hasattr(graph.relation_graph2, 'relation_similarity_matrix'):
+                        semantic_sim_matrix = graph.relation_graph2.relation_similarity_matrix
+                
+                rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_semantic_enhanced_rdg_edges(
+                    graph, semantic_similarity_matrix=semantic_sim_matrix, config=rdg_config
+                )
+            else:
+                rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_rdg_edges(graph, rdg_config)
             
             # Add RDG edges as 5th edge type (edge_type = 4)
             if rdg_edge_index.size(1) > 0:
@@ -887,18 +905,33 @@ def build_relation_graph_exp(graph, dataset_name=None):
         rdg_enabled_exp = hasattr(flags, 'use_rdg') and getattr(flags, 'use_rdg', False)
         if rdg_enabled_exp:
             try:
-                from ultra.rdg import build_rdg_edges, RDGConfig
+                from ultra.rdg import build_rdg_edges, build_semantic_enhanced_rdg_edges, RDGConfig
+                
+                # Check if semantic enhancement is enabled
+                use_semantic_enhancement = getattr(flags, 'rdg_use_semantic_enhancement', False)
                 
                 # Create RDG configuration from flags
                 rdg_config = RDGConfig(
                     enabled=True,
                     min_dependency_weight=getattr(flags, 'rdg_min_weight', 0.001),
                     precedence_method=getattr(flags, 'rdg_precedence_method', 'indegree'),
-                    normalize_weights=getattr(flags, 'rdg_normalize_weights', True)
+                    normalize_weights=getattr(flags, 'rdg_normalize_weights', True),
+                    use_semantic_enhancement=use_semantic_enhancement,
+                    semantic_similarity_threshold=getattr(flags, 'rdg_semantic_similarity_threshold', 0.5),
+                    semantic_weight_alpha=getattr(flags, 'rdg_semantic_weight_alpha', 0.5),
+                    semantic_filter_mode=getattr(flags, 'rdg_semantic_filter_mode', 'both')
                 )
                 
-                # Build RDG edges
-                rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_rdg_edges(graph, rdg_config)
+                # Build RDG edges (with or without semantic enhancement)
+                # Note: relation_graph2 is built later in this function, so we need to handle it carefully
+                if use_semantic_enhancement:
+                    # Semantic similarity matrix will be available after relation_graph2 is built
+                    # We'll pass None here and let build_semantic_enhanced_rdg_edges get it from graph.relation_graph2
+                    rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_semantic_enhanced_rdg_edges(
+                        graph, semantic_similarity_matrix=None, config=rdg_config
+                    )
+                else:
+                    rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_rdg_edges(graph, rdg_config)
                 
                 # Add RDG edges as 5th edge type (edge_type = 4)
                 if rdg_edge_index.size(1) > 0:

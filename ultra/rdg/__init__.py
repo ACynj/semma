@@ -11,6 +11,8 @@ from .rdg_builder import (
     compute_relation_precedence,
     get_preceding_relations,
     build_rdg_edges,
+    enhance_rdg_with_semantics,
+    build_semantic_enhanced_rdg_edges,
     RDGConfig
 )
 
@@ -19,6 +21,8 @@ __all__ = [
     'compute_relation_precedence',
     'get_preceding_relations',
     'build_rdg_edges',
+    'enhance_rdg_with_semantics',
+    'build_semantic_enhanced_rdg_edges',
     'RDGConfig'
 ]
 

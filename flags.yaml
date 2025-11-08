@@ -31,3 +31,8 @@ use_rdg: False # [True, False], if True, enable Relation Dependency Graph constr
 rdg_min_weight: 0.001 # Minimum weight threshold for dependency edges
 rdg_precedence_method: indegree # [indegree, topological] Method for computing relation precedence
 rdg_normalize_weights: True # [True, False] Whether to normalize dependency weights
+# Semantic-Enhanced RDG Settings
+rdg_use_semantic_enhancement: False # [True, False], if True, use semantic similarity to enhance RDG edges
+rdg_semantic_similarity_threshold: 0.5 # Minimum semantic similarity (normalized to [0,1]) to keep an edge
+rdg_semantic_weight_alpha: 0.5 # Weight for combining structural and semantic: (1-alpha)*structural + alpha*semantic
+rdg_semantic_filter_mode: both # [filter, weight, both] filter: filter by threshold, weight: weight by similarity, both: filter and weight
