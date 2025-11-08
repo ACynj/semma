@@ -1,0 +1,32 @@
+{
+  "trial_number": 2,
+  "score": 0.7022789,
+  "params": {
+    "similarity_threshold_init": 0.55,
+    "enhancement_strength_init": 0.03
+  },
+  "eval_results": {
+    "CoDExSmall": {
+      "mrr": 0.650141,
+      "hits@10": 0.887309
+    },
+    "FB15k237Inductive": {
+      "mrr": 0.486386,
+      "hits@10": 0.635036
+    },
+    "WN18RRInductive": {
+      "mrr": 0.720464,
+      "hits@10": 0.812332
+    },
+    "NELLInductive": {
+      "mrr": 0.666427,
+      "hits@10": 0.902985
+    },
+    "avg_mrr": 0.6308545,
+    "avg_hits10": 0.8094155000000001,
+    "score": 0.7022789
+  },
+  "timestamp": "2025-11-08T08:17:09.458814",
+  "manually_added": true,
+  "note": "\u4f7f\u7528epoch 9 checkpoint\u8bc4\u4f30\uff08epoch 10\u672a\u5b8c\u6210\uff09"
+}

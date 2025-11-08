@@ -609,7 +609,8 @@ def build_relation_graph(graph):
     )
 
     # ===== RDG (Relation Dependency Graph) Integration =====
-    if hasattr(flags, 'use_rdg') and flags.use_rdg:
+    rdg_enabled = hasattr(flags, 'use_rdg') and getattr(flags, 'use_rdg', False)
+    if rdg_enabled:
         try:
             from ultra.rdg import build_rdg_edges, RDGConfig
             
@@ -656,11 +657,19 @@ def build_relation_graph(graph):
                 print(f"[RDG] Added {rdg_edge_index.size(1)} dependency edges to relation graph")
             else:
                 print("[RDG] No dependency edges found (all below threshold)")
+                # 即使没有依赖边，也创建元数据（使用默认值）
                 graph.rdg_precedence = {r: 0.5 for r in range(num_rels)}
                 graph.rdg_dependency_edges = []
+                graph.rdg_edge_weights = torch.empty((0,), dtype=torch.float, device=device)
         except Exception as e:
             print(f"[RDG] Warning: Failed to build RDG edges: {e}")
+            import traceback
+            traceback.print_exc()
             print("[RDG] Continuing without RDG edges...")
+            # 即使失败，也创建默认元数据
+            graph.rdg_precedence = {r: 0.5 for r in range(num_rels)}
+            graph.rdg_dependency_edges = []
+            graph.rdg_edge_weights = torch.empty((0,), dtype=torch.float, device=device)
     # ===== RDG Integration End =====
 
     graph.relation_graph = rel_graph
@@ -873,6 +882,63 @@ def build_relation_graph_exp(graph, dataset_name=None):
             num_nodes=num_rels, 
             num_relations=4
         )
+        
+        # ===== RDG (Relation Dependency Graph) Integration =====
+        rdg_enabled_exp = hasattr(flags, 'use_rdg') and getattr(flags, 'use_rdg', False)
+        if rdg_enabled_exp:
+            try:
+                from ultra.rdg import build_rdg_edges, RDGConfig
+                
+                # Create RDG configuration from flags
+                rdg_config = RDGConfig(
+                    enabled=True,
+                    min_dependency_weight=getattr(flags, 'rdg_min_weight', 0.001),
+                    precedence_method=getattr(flags, 'rdg_precedence_method', 'indegree'),
+                    normalize_weights=getattr(flags, 'rdg_normalize_weights', True)
+                )
+                
+                # Build RDG edges
+                rdg_edge_index, rdg_edge_weights, tau, dependency_edges = build_rdg_edges(graph, rdg_config)
+                
+                # Add RDG edges as 5th edge type (edge_type = 4)
+                if rdg_edge_index.size(1) > 0:
+                    # Create edge types for RDG edges (type 4)
+                    rdg_edge_types = torch.full(
+                        (rdg_edge_index.size(1),),
+                        4,  # 5th edge type (0-indexed)
+                        dtype=torch.long,
+                        device=device
+                    )
+                    
+                    # Concatenate with existing edges
+                    rel_graph.edge_index = torch.cat([
+                        rel_graph.edge_index,
+                        rdg_edge_index
+                    ], dim=1)
+                    
+                    rel_graph.edge_type = torch.cat([
+                        rel_graph.edge_type,
+                        rdg_edge_types
+                    ], dim=0)
+                    
+                    # Update number of relation types
+                    rel_graph.num_relations = 5
+                    
+                    # Store RDG metadata in graph
+                    graph.rdg_precedence = tau
+                    graph.rdg_dependency_edges = dependency_edges
+                    graph.rdg_edge_weights = rdg_edge_weights
+                    
+                    print(f"[RDG] Added {rdg_edge_index.size(1)} dependency edges to relation graph")
+                else:
+                    print("[RDG] No dependency edges found (all below threshold)")
+                    graph.rdg_precedence = {r: 0.5 for r in range(num_rels)}
+                    graph.rdg_dependency_edges = []
+            except Exception as e:
+                print(f"[RDG] Warning: Failed to build RDG edges: {e}")
+                print("[RDG] Continuing without RDG edges...")
+        # ===== RDG Integration End =====
+        
         graph.relation_graph = rel_graph
 
         if(flags.harder_setting == True):

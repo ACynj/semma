@@ -24,5 +24,10 @@ models_path: /T20030104/ynj/semma/models # Models directory path
 kg_datasets_path: /T20030104/ynj/semma/kg-datasets # Knowledge graph datasets directory path
 openrouter_path: /T20030104/ynj/semma/openrouter # OpenRouter data directory path
 # EnhancedUltra Similarity Enhancement Parameters
-similarity_threshold_init: 0.55
-enhancement_strength_init: 0.03
+similarity_threshold_init: 0.5
+enhancement_strength_init: 0.13
+# RDG (Relation Dependency Graph) Settings
+use_rdg: False # [True, False], if True, enable Relation Dependency Graph construction
+rdg_min_weight: 0.001 # Minimum weight threshold for dependency edges
+rdg_precedence_method: indegree # [indegree, topological] Method for computing relation precedence
+rdg_normalize_weights: True # [True, False] Whether to normalize dependency weights
