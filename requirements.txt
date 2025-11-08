@@ -1,4 +1,6 @@
 # 注意：torch-geometric 必须使用 == 锁定版本，否则会自动升级 PyTorch！
+# 必须先安装torch==2.1.0，然后安装torch-geometric，避免torch被升级
+torch==2.1.0
 torch-geometric==2.4.0
 
 ninja

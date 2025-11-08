@@ -47,7 +47,7 @@ train:
   gpus: {{ gpus }}
   batch_size: 64
   num_epoch: 10
-  log_interval: 200
+  log_interval: 800
   batch_per_epoch: 20000
   fast_test: 500
   #logger: wandb

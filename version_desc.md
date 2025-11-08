@@ -9,9 +9,12 @@ ARE-V4：阈值 0.85 增强： 0.025
 ARE-V5：阈值 0.8 增强： 0.025
 
 ARE-V3_vip：阈值 0.8 增强： 0.05,step:200000
+semma_vip:按照论文参数训练
 
 ARE-V6：阈值 0.75 增强： 0.025
 ARE-V7：阈值 0.7 增强： 0.025
 ARE-V8：阈值 0.65 增强： 0.025
 
 python script/pretrain.py -c config/transductive/pretrain_semma.yaml --gpus [0] --ckpt /T20030104/ynj/semma/ckpts/semma.pth
+
+bash run_commands.sh

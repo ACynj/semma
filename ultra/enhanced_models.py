@@ -296,10 +296,14 @@ class EnhancedUltra(nn.Module):
         )
         
         # 基于相似度的关系增强模块（新增）
+        # 从flags.yaml读取初始值，如果没有则使用默认值
+        similarity_threshold_init = getattr(flags, 'similarity_threshold_init', 0.8)
+        enhancement_strength_init = getattr(flags, 'enhancement_strength_init', 0.05)
+        
         self.similarity_enhancer = SimilarityBasedRelationEnhancer(
             embedding_dim=64,
-            similarity_threshold_init=0.8,  # 初始阈值0.5
-            enhancement_strength_init=0.05   # 初始增强强度0.05，保持较小以避免过度影响
+            similarity_threshold_init=similarity_threshold_init,
+            enhancement_strength_init=enhancement_strength_init
         )
         
         # 存储表示

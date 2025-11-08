@@ -24,5 +24,5 @@ models_path: /T20030104/ynj/semma/models # Models directory path
 kg_datasets_path: /T20030104/ynj/semma/kg-datasets # Knowledge graph datasets directory path
 openrouter_path: /T20030104/ynj/semma/openrouter # OpenRouter data directory path
 # EnhancedUltra Similarity Enhancement Parameters
-similarity_threshold_init: 0.55
-enhancement_strength_init: 0.03
+similarity_threshold_init: 0.8 # Initial similarity threshold for SimilarityBasedRelationEnhancer (range: 0.0-1.0)
+enhancement_strength_init: 0.05 # Initial enhancement strength for SimilarityBasedRelationEnhancer (range: 0.0-0.2)
