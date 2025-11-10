@@ -19,6 +19,7 @@ from torch_geometric.data import Data
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from ultra import tasks, util, parse
 from ultra.models import Ultra
+from ultra.enhanced_models import EnhancedUltra
 from script.run import train_and_validate, test
 
 mydir = os.getcwd()
@@ -211,6 +212,12 @@ if __name__ == "__main__":
 
             if(flags.run == "semma"):
                 model = Ultra(
+                    rel_model_cfg=cfg.model.relation_model,
+                    entity_model_cfg=cfg.model.entity_model,
+                    sem_model_cfg=cfg.model.semantic_model,
+                )
+            elif(flags.run == "EnhancedUltra"):
+                model = EnhancedUltra(
                     rel_model_cfg=cfg.model.relation_model,
                     entity_model_cfg=cfg.model.entity_model,
                     sem_model_cfg=cfg.model.semantic_model,
