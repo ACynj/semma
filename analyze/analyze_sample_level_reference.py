@@ -47,9 +47,9 @@ def load_dataset(dataset_name, dataset_type="transductive"):
         'ConceptNet 100k-ht': 'ConceptNet100k',
         'WDsinger-ht': 'WDsinger',
         'AristoV4-ht': 'AristoV4',
-        'FB15K237Inductive:v1': 'FB15K237Inductive',
-        'FB15K237Inductive:v2': 'FB15K237Inductive',
-        'FB15K237Inductive:v3': 'FB15K237Inductive',
+        'FB15K237Inductive:v1': 'FB15k237Inductive',  # 注意：小写k
+        'FB15K237Inductive:v2': 'FB15k237Inductive',
+        'FB15K237Inductive:v3': 'FB15k237Inductive',
         'NELLInductive:v1': 'NELLInductive',
         'NELLInductive:v3': 'NELLInductive',
     }
@@ -62,14 +62,21 @@ def load_dataset(dataset_name, dataset_type="transductive"):
     if ':' in dataset_name:
         parts = dataset_name.split(':')
         if len(parts) == 2:
-            actual_dataset_name = parts[0]
+            # 如果已经在mapping中，不要覆盖
+            if dataset_name not in dataset_name_mapping:
+                actual_dataset_name = parts[0]
             version = parts[1]
     
+    # 获取数据集路径
+    kg_datasets_path = flags.get('kg_datasets_path', '/T20030104/ynj/semma/kg-datasets')
+    
     # 构建配置
+    # root参数应该是kg_datasets_path（数据集会自动根据name在kg_datasets_path下查找）
+    # 根据配置文件，root直接设置为kg_datasets_path
     cfg = {
         'dataset': {
             'class': actual_dataset_name,
-            'path': flags.get('kg_datasets_path', '/T20030104/ynj/semma/kg-datasets')
+            'root': kg_datasets_path,  # 使用kg_datasets_path作为root
         },
         'task': {
             'name': 'InductiveInference' if dataset_type != 'transductive' else 'LinkPrediction'
