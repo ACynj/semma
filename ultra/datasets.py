@@ -740,10 +740,66 @@ class RelLinkPredDataset(InMemoryDataset):
 
     @property
     def raw_dir(self) -> str:
+        """返回 raw 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                # 处理name，FB15k-237 -> fb15k237
+                name_normalized = self.name.lower().replace('-', '')
+                raw_dir_from_flags = os.path.join(kg_datasets_path, name_normalized, self.name, "raw")
+                if os.path.exists(raw_dir_from_flags):
+                    return raw_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, self.name, "raw")
+            except:
+                pass
+        
+        # 默认使用 self.root
         return osp.join(self.root, self.name, 'raw')
 
     @property
     def processed_dir(self) -> str:
+        """返回 processed 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                # 处理name，FB15k-237 -> fb15k237
+                name_normalized = self.name.lower().replace('-', '')
+                processed_dir_from_flags = os.path.join(kg_datasets_path, name_normalized, self.name, "processed")
+                if os.path.exists(processed_dir_from_flags):
+                    return processed_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, self.name, "processed")
+            except:
+                pass
+        
+        # 默认使用 self.root
         return osp.join(self.root, self.name, 'processed')
 
     @property
@@ -758,6 +814,25 @@ class RelLinkPredDataset(InMemoryDataset):
         ]
 
     def download(self) -> None:
+        # 优先检查本地文件，如果所有文件都已存在则直接返回，不进行任何下载
+        raw_dir = self.raw_dir
+        raw_file_names = self.raw_file_names
+        raw_paths = [os.path.join(raw_dir, fname) for fname in raw_file_names]
+        
+        print(f"Checking for raw files in: {raw_dir}")
+        all_files_exist = True
+        for path in raw_paths:
+            exists = os.path.exists(path)
+            if not exists:
+                all_files_exist = False
+                print(f"  ✗ Missing: {path}")
+            else:
+                print(f"  ✓ Exists: {path}")
+        
+        if all_files_exist:
+            print(f"\n✓ All raw files already exist, using local files. Skipping download.\n")
+            return
+        
         import time
         import ssl
         import urllib.request
@@ -939,6 +1014,68 @@ class WordNet18RR(InMemoryDataset):
         self.load(self.processed_paths[0])
 
     @property
+    def raw_dir(self) -> str:
+        """返回 raw 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                # WN18RR的raw文件在wn18rr/raw/，不在wn18rr/WN18RR/raw/
+                raw_dir_from_flags = os.path.join(kg_datasets_path, "wn18rr", "raw")
+                if os.path.exists(raw_dir_from_flags):
+                    return raw_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, "WN18RR", "raw")
+            except:
+                pass
+        
+        # 默认使用 self.root
+        return osp.join(self.root, 'WN18RR', 'raw')
+
+    @property
+    def processed_dir(self) -> str:
+        """返回 processed 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                # WN18RR的processed文件在wn18rr/WN18RR/processed/
+                processed_dir_from_flags = os.path.join(kg_datasets_path, "wn18rr", "WN18RR", "processed")
+                if os.path.exists(processed_dir_from_flags):
+                    return processed_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, "WN18RR", "processed")
+            except:
+                pass
+        
+        # 默认使用 self.root
+        return osp.join(self.root, 'WN18RR', 'processed')
+
+    @property
     def raw_file_names(self) -> List[str]:
         return ['train.txt', 'valid.txt', 'test.txt']
 
@@ -947,6 +1084,24 @@ class WordNet18RR(InMemoryDataset):
         return 'data.pt'
 
     def download(self) -> None:
+        # 优先检查本地文件，如果所有文件都已存在则直接返回，不进行任何下载
+        raw_dir = self.raw_dir
+        raw_file_names = self.raw_file_names
+        raw_paths = [os.path.join(raw_dir, fname) for fname in raw_file_names]
+        
+        print(f"Checking for raw files in: {raw_dir}")
+        all_files_exist = True
+        for path in raw_paths:
+            exists = os.path.exists(path)
+            if not exists:
+                all_files_exist = False
+                print(f"  ✗ Missing: {path}")
+            else:
+                print(f"  ✓ Exists: {path}")
+        
+        if all_files_exist:
+            print(f"\n✓ All raw files already exist, using local files. Skipping download.\n")
+            return
         import time
         import ssl
         import urllib.request
@@ -1133,9 +1288,42 @@ def FB15k237(root, **kwargs):
     test_data.id2entity = fb_id2entity
     test_data.id2relation = fb_id2relation
 
-    root_path = os.path.join(root, "fb15k237/FB15k-237/raw/relations.dict")
-    root_path = root_path.replace('~', '$HOME')
-    root_path = os.path.expandvars(root_path)
+    # 使用dataset的raw_dir属性来获取正确的路径
+    raw_dir = dataset.raw_dir
+    root_path = os.path.join(raw_dir, "relations.dict")
+    
+    # 如果文件不存在，尝试使用flags中的路径
+    if not os.path.exists(root_path):
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                root_path = os.path.join(kg_datasets_path, "fb15k237", "FB15k-237", "raw", "relations.dict")
+        except:
+            pass
+    
+    # 如果还是不存在，尝试使用base_path
+    if not os.path.exists(root_path):
+        try:
+            base_path = getattr(flags, 'base_path', None)
+            if base_path and os.path.exists(base_path):
+                root_path = os.path.join(base_path, "kg-datasets", "fb15k237", "FB15k-237", "raw", "relations.dict")
+        except:
+            pass
+    
+    # 最后尝试原始路径（处理相对路径）
+    if not os.path.exists(root_path):
+        original_path = os.path.join(root, "fb15k237/FB15k-237/raw/relations.dict")
+        original_path = original_path.replace('~', '$HOME')
+        original_path = os.path.expandvars(original_path)
+        if not os.path.isabs(original_path):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path:
+                    original_path = os.path.join(base_path, original_path.lstrip('./'))
+            except:
+                pass
+        if os.path.exists(original_path):
+            root_path = original_path
     
     relations_dict = {}
     # Open the file and read line by line
@@ -1332,6 +1520,36 @@ class TransductiveDataset(InMemoryDataset):
         
         # 默认使用 self.root
         return os.path.join(self.root, self.name, "raw")
+    
+    @property
+    def processed_dir(self):
+        """返回 processed 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                processed_dir_from_flags = os.path.join(kg_datasets_path, self.name, "processed")
+                if os.path.exists(processed_dir_from_flags):
+                    return processed_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, self.name, "processed")
+            except:
+                pass
+        
+        # 默认使用 self.root
+        return os.path.join(self.root, self.name, "processed")
 
     @property
     def raw_file_names(self):
@@ -4261,17 +4479,95 @@ class JointDataset(InMemoryDataset):
             pre_transform = build_relation_graph_exp
         self.graphs = [self.datasets_map[ds](root=root, dataset_name = ds, dataset_version=None) for ds in graphs]
         self.num_graphs = len(graphs)
+        
+        # 先设置root，以便processed_dir能正确计算
+        self.root = root
+        
+        # 检查processed文件是否存在（在super().__init__之前）
+        processed_dir = self.processed_dir
+        processed_file = os.path.join(processed_dir, self.processed_file_names)
+        processed_exists_before = os.path.exists(processed_file)
+        
+        if processed_exists_before:
+            print(f"✅ 找到processed文件: {processed_file}")
+            print(f"   文件大小: {os.path.getsize(processed_file) / (1024*1024):.2f} MB")
+        else:
+            print(f"⚠️  Processed文件不存在: {processed_file}")
+            print(f"   将进行数据处理...")
+        
         super().__init__(root, transform, pre_transform)
+        
+        # 检查是否重新处理了
+        processed_exists_after = os.path.exists(processed_file)
+        if processed_exists_before and processed_exists_after:
+            print(f"✅ 使用本地processed文件，跳过重新处理")
+        elif not processed_exists_before and processed_exists_after:
+            print(f"✅ 数据处理完成，已保存到: {processed_file}")
+        else:
+            print(f"⚠️  注意: processed文件状态异常")
+        
         self.data = torch.load(self.processed_paths[0])
         # print(self.data)
         # exit()
 
     @property
     def raw_dir(self):
+        """返回 raw 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                raw_dir_from_flags = os.path.join(kg_datasets_path, "joint", f'{self.num_graphs}g', "raw")
+                if os.path.exists(raw_dir_from_flags):
+                    return raw_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, "joint", f'{self.num_graphs}g', "raw")
+            except:
+                pass
+        
+        # 默认使用 self.root
         return os.path.join(self.root, "joint", f'{self.num_graphs}g', "raw")
 
     @property
     def processed_dir(self):
+        """返回 processed 目录路径，优先使用 flags 中配置的绝对路径"""
+        # 优先使用 flags 中配置的绝对路径
+        try:
+            kg_datasets_path = getattr(flags, 'kg_datasets_path', None)
+            if kg_datasets_path and os.path.exists(kg_datasets_path):
+                processed_dir_from_flags = os.path.join(kg_datasets_path, "joint", f'{self.num_graphs}g', "processed")
+                if os.path.exists(processed_dir_from_flags):
+                    return processed_dir_from_flags
+        except:
+            pass
+        
+        # 如果 flags 中没有配置，尝试使用 base_path 构建绝对路径
+        root = self.root
+        if not os.path.isabs(root):
+            try:
+                base_path = getattr(flags, 'base_path', None)
+                if base_path and os.path.exists(base_path):
+                    # 处理相对路径，去除 ./ 前缀
+                    root_normalized = root.lstrip('./') if root.startswith('./') else root
+                    root_abs = os.path.join(base_path, root_normalized)
+                    if os.path.exists(root_abs):
+                        return os.path.join(root_abs, "joint", f'{self.num_graphs}g', "processed")
+            except:
+                pass
+        
+        # 默认使用 self.root
         return os.path.join(self.root, "joint", f'{self.num_graphs}g', "processed")
 
     @property

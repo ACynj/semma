@@ -1,6 +1,6 @@
 {
   "trial_number": 2,
-  "score": 0.7022789,
+  "score": 0.6595212666666667,
   "params": {
     "similarity_threshold_init": 0.55,
     "enhancement_strength_init": 0.03
@@ -22,11 +22,19 @@
       "mrr": 0.666427,
       "hits@10": 0.902985
     },
-    "avg_mrr": 0.6308545,
-    "avg_hits10": 0.8094155000000001,
-    "score": 0.7022789
+    "FB15k237": {
+      "mrr": 0.468747,
+      "hits@10": 0.668963
+    },
+    "WN18RR": {
+      "mrr": 0.551705,
+      "hits@10": 0.670389
+    },
+    "avg_mrr": 0.590645,
+    "avg_hits10": 0.7628356666666667,
+    "score": 0.6595212666666667
   },
-  "timestamp": "2025-11-08T08:17:09.458814",
+  "timestamp": "2025-11-09T13:51:15.024238",
   "manually_added": true,
-  "note": "\u4f7f\u7528epoch 9 checkpoint\u8bc4\u4f30\uff08epoch 10\u672a\u5b8c\u6210\uff09"
+  "note": "\u4f7f\u7528epoch 9 checkpoint\u8bc4\u4f30\uff08epoch 10\u672a\u5b8c\u6210\uff09\uff0c\u5df2\u8865\u5145\u5b8c\u65746\u4e2a\u6570\u636e\u96c6"
 }

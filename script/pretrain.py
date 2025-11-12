@@ -295,8 +295,57 @@ if __name__ == "__main__":
         )
 
     if "checkpoint" in cfg:
-        state = torch.load(cfg.checkpoint, map_location="cpu")
-        model.load_state_dict(state["model"])
+        # 处理checkpoint路径：如果是相对路径，基于项目根目录解析
+        checkpoint_path = cfg.checkpoint
+        # 规范化路径：去除./前缀
+        if checkpoint_path.startswith('./'):
+            checkpoint_path = checkpoint_path[2:]
+        
+        # 如果是相对路径，基于项目根目录（mydir）解析
+        if not os.path.isabs(checkpoint_path):
+            checkpoint_path = os.path.join(mydir, checkpoint_path)
+        
+        # 规范化路径（去除多余的/./）
+        checkpoint_path = os.path.normpath(checkpoint_path)
+        
+        if not os.path.exists(checkpoint_path):
+            logger.warning(f"⚠️  Checkpoint文件不存在: {checkpoint_path}")
+            logger.warning(f"   尝试使用原始路径: {cfg.checkpoint}")
+            checkpoint_path = cfg.checkpoint
+        
+        logger.warning(f"📦 加载checkpoint: {checkpoint_path}")
+        state = torch.load(checkpoint_path, map_location="cpu")
+        
+        # 尝试加载checkpoint，如果缺少新参数（如门控网络），使用部分加载
+        try:
+            model.load_state_dict(state["model"], strict=True)
+            logger.warning("✅ Checkpoint完全加载成功")
+        except RuntimeError as e:
+            if "Missing key(s)" in str(e) or "Unexpected key(s)" in str(e):
+                logger.warning("⚠️  Checkpoint与模型不完全匹配，使用部分加载...")
+                model_dict = model.state_dict()
+                checkpoint_dict = state["model"]
+                
+                # 只加载匹配的键
+                filtered_dict = {k: v for k, v in checkpoint_dict.items() if k in model_dict}
+                missing_keys = set(model_dict.keys()) - set(filtered_dict.keys())
+                unexpected_keys = set(checkpoint_dict.keys()) - set(model_dict.keys())
+                
+                if unexpected_keys:
+                    logger.warning(f"   Checkpoint中的额外键（将被忽略）: {len(unexpected_keys)}个")
+                if missing_keys:
+                    logger.warning(f"   模型中的缺失键（将使用随机初始化）: {len(missing_keys)}个")
+                    # 检查是否是门控网络参数
+                    gate_keys = [k for k in missing_keys if 'enhancement_gate' in k]
+                    if gate_keys:
+                        logger.warning(f"   ✅ 门控网络参数（新参数，将使用随机初始化）: {len(gate_keys)}个")
+                
+                # 更新匹配的部分
+                model_dict.update(filtered_dict)
+                model.load_state_dict(model_dict, strict=False)
+                logger.warning("✅ 部分加载完成，新参数（如门控网络）将使用随机初始化")
+            else:
+                raise e
 
     model = model.to(device)
     

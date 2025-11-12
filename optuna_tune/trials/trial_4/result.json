@@ -1,0 +1,40 @@
+{
+  "trial_number": 4,
+  "score": 0.6747956333333334,
+  "params": {
+    "similarity_threshold_init": 0.8,
+    "enhancement_strength_init": 0.11
+  },
+  "eval_results": {
+    "FB15k237": {
+      "mrr": 0.474954,
+      "hits@10": 0.672188
+    },
+    "WN18RR": {
+      "mrr": 0.552059,
+      "hits@10": 0.668794
+    },
+    "CoDExSmall": {
+      "mrr": 0.64071,
+      "hits@10": 0.887309
+    },
+    "FB15k237Inductive": {
+      "mrr": 0.495759,
+      "hits@10": 0.658151
+    },
+    "WN18RRInductive": {
+      "mrr": 0.710133,
+      "hits@10": 0.806971
+    },
+    "NELLInductive": {
+      "mrr": 0.800126,
+      "hits@10": 0.91791
+    },
+    "avg_mrr": 0.6122901666666667,
+    "avg_hits10": 0.7685538333333334,
+    "score": 0.6747956333333334
+  },
+  "timestamp": "2025-11-09T05:08:47.461649",
+  "manually_added": true,
+  "note": "\u7b2c\u4e94\u6b21\u5b9e\u9a8c\uff08Trial 4\uff09"
+}

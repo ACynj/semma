@@ -1,0 +1,60 @@
+# 继续训练配置文件 - 在现有checkpoint基础上训练门控网络
+# 用途：在 ckpts/optuna_1.pth 基础上继续训练，让门控网络学习合适的权重
+
+output_dir: ./gate_training_output 
+
+# 加载现有checkpoint（相对路径，脚本会自动处理）
+checkpoint: ./ckpts/optuna_1.pth
+
+dataset:
+  class: JointDataset
+  graphs: [FB15k237, WN18RR, CoDExMedium]
+  root: ./kg-datasets/
+
+model:
+  class: Ultra  # 注意：实际使用的模型由 flags.yaml 中的 run 参数决定（EnhancedUltra）
+  relation_model:
+    class: RelNBFNet
+    input_dim: 64
+    hidden_dims: [64, 64, 64, 64, 64, 64]
+    message_func: distmult
+    aggregate_func: sum
+    short_cut: yes
+    layer_norm: yes
+  semantic_model:
+    class: SemRelNBFNet
+    input_dim: 64
+    hidden_dims: [64, 64, 64, 64, 64, 64]
+    message_func: distmult
+    aggregate_func: sum
+    short_cut: yes
+    layer_norm: yes
+  entity_model:
+    class: EntityNBFNet
+    input_dim: 64
+    hidden_dims: [64, 64, 64, 64, 64, 64]
+    message_func: distmult
+    aggregate_func: sum
+    short_cut: yes
+    layer_norm: yes
+
+task:
+  name: MultiGraphPretraining
+  num_negative: 128
+  strict_negative: yes
+  adversarial_temperature: 1
+  metric: [mr, mrr, hits@1, hits@3, hits@10]
+
+optimizer:
+  class: AdamW
+  lr: 1.0e-4  # 较小的学习率，用于微调门控网络
+
+train:
+  gpus: [0]  # 可以通过命令行参数覆盖: --gpus [0]
+  batch_size: 64
+  num_epoch: 5  # 训练5个epoch，让门控网络学习
+  log_interval: 800
+  batch_per_epoch: 20000
+  fast_test: 500
+  #logger: wandb
+

@@ -1,4 +1,4 @@
-run: EnhancedUltra # [ultra, semma, EnhancedUltra] Model type to use
+run: semma # [ultra, semma, EnhancedUltra] Model type to use
 LLM: gpt4o # [gpt4o, qwen3-32b, deepseekv3]
 rg2_embedding: combined-sum # ["combined", "combined-sum", "no llm", "llm name", "llm description"]
 k: 0 # should be positive if you want to add specific num of 5th type edges to each relation
@@ -24,15 +24,11 @@ models_path: /T20030104/ynj/semma/models # Models directory path
 kg_datasets_path: /T20030104/ynj/semma/kg-datasets # Knowledge graph datasets directory path
 openrouter_path: /T20030104/ynj/semma/openrouter # OpenRouter data directory path
 # EnhancedUltra Similarity Enhancement Parameters
-similarity_threshold_init: 0.5
-enhancement_strength_init: 0.13
-# RDG (Relation Dependency Graph) Settings
-use_rdg: False # [True, False], if True, enable Relation Dependency Graph construction
-rdg_min_weight: 0.001 # Minimum weight threshold for dependency edges
-rdg_precedence_method: indegree # [indegree, topological] Method for computing relation precedence
-rdg_normalize_weights: True # [True, False] Whether to normalize dependency weights
-# Semantic-Enhanced RDG Settings
-rdg_use_semantic_enhancement: False # [True, False], if True, use semantic similarity to enhance RDG edges
-rdg_semantic_similarity_threshold: 0.5 # Minimum semantic similarity (normalized to [0,1]) to keep an edge
-rdg_semantic_weight_alpha: 0.5 # Weight for combining structural and semantic: (1-alpha)*structural + alpha*semantic
-rdg_semantic_filter_mode: both # [filter, weight, both] filter: filter by threshold, weight: weight by similarity, both: filter and weight
+similarity_threshold_init: 0.85
+enhancement_strength_init: 0.09
+# Adaptive Enhancement Gate Settings
+use_adaptive_gate: False # [True, False], if True, use adaptive gate to learn when to apply enhancement
+# Dataset-level Enhancement Control (like SEMMA-HYBRID)
+# List of datasets where enhancement should be disabled
+# Format: dataset names as they appear in cfg.dataset['class']
+# Examples: ["ConceptNet100k", "NELL23k", "Hetionet", "AristoV4"]

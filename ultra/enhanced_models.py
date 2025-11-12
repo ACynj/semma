@@ -35,16 +35,20 @@ class SimilarityBasedRelationEnhancer(nn.Module):
         """获取当前的可学习增强强度（sigmoid映射到0-0.2）"""
         return torch.sigmoid(self.enhancement_strength_raw) * 0.2
     
-    def forward(self, final_relation_representations, query_rels):
+    def forward(self, final_relation_representations, query_rels, return_enhancement_only=False):
         """
         基于相似度增强关系表示
         
         Args:
             final_relation_representations: [batch_size, num_relations, embedding_dim]
             query_rels: [batch_size] 查询关系索引
+            return_enhancement_only: 如果为True，只返回增强增量（不进行内部混合），
+                                    由外部门控机制控制混合；如果为False，使用内部strength进行混合
         
         Returns:
             enhanced_representations: [batch_size, num_relations, embedding_dim]
+            如果 return_enhancement_only=True，返回的是增强增量（weighted_similar_repr），
+            需要与原始表示混合；如果为False，返回的是已经混合后的表示
         """
         batch_size, num_relations, embedding_dim = final_relation_representations.shape
         device = final_relation_representations.device
@@ -55,7 +59,12 @@ class SimilarityBasedRelationEnhancer(nn.Module):
         temp = torch.clamp(self.temperature, min=0.1, max=10.0)  # 限制温度范围
         
         # 初始化增强后的表示
-        enhanced_reprs = final_relation_representations.clone()
+        if return_enhancement_only:
+            # 如果只返回增强增量，初始化为零（只更新查询关系的位置）
+            enhanced_reprs = torch.zeros_like(final_relation_representations)
+        else:
+            # 如果返回混合后的表示，初始化为原始表示
+            enhanced_reprs = final_relation_representations.clone()
         
         for i in range(batch_size):
             query_rel_idx = query_rels[i].item()
@@ -93,7 +102,9 @@ class SimilarityBasedRelationEnhancer(nn.Module):
             valid_indices = torch.where(above_threshold)[0]
             
             if len(valid_indices) == 0:
-                # 如果没有超过阈值的，保持原样
+                # 如果没有超过阈值的，保持原样（零增量或原始表示）
+                if not return_enhancement_only:
+                    enhanced_reprs[i, query_rel_idx, :] = query_rel_repr
                 continue
             
             # 使用平滑的权重而不是硬阈值
@@ -124,13 +135,17 @@ class SimilarityBasedRelationEnhancer(nn.Module):
             # [num_valid, embedding_dim] * [num_valid, 1] -> [embedding_dim]
             weighted_similar_repr = torch.sum(valid_reprs * adjusted_weights.unsqueeze(1), dim=0)  # [embedding_dim]
             
-            # 应用增强：使用小的增强强度，保持对原模型的最小影响
-            # enhanced = original + strength * (weighted_similar - original)
-            # 这等价于：enhanced = (1 - strength) * original + strength * weighted_similar
-            enhanced_query_repr = (1.0 - strength) * query_rel_repr + strength * weighted_similar_repr
-            
-            # 更新查询关系的表示
-            enhanced_reprs[i, query_rel_idx, :] = enhanced_query_repr
+            # 根据 return_enhancement_only 决定返回什么
+            if return_enhancement_only:
+                # 只返回增强增量（weighted_similar_repr - query_rel_repr），由外部门控机制控制混合
+                enhancement_delta = weighted_similar_repr - query_rel_repr
+                enhanced_reprs[i, query_rel_idx, :] = enhancement_delta
+            else:
+                # 使用内部strength进行混合（原有逻辑）
+                # enhanced = original + strength * (weighted_similar - original)
+                # 这等价于：enhanced = (1 - strength) * original + strength * weighted_similar
+                enhanced_query_repr = (1.0 - strength) * query_rel_repr + strength * weighted_similar_repr
+                enhanced_reprs[i, query_rel_idx, :] = enhanced_query_repr
         
         return enhanced_reprs
 
@@ -186,8 +201,14 @@ class OptimizedPromptGraph(nn.Module):
             return None
             
         # 采样少量示例
+        # 在训练时使用随机采样，在推理时使用确定性采样（选择前N个）
         if query_edges.shape[1] > num_samples:
-            indices = torch.randperm(query_edges.shape[1], device=device)[:num_samples]
+            if self.training:
+                # 训练时：随机采样以增加多样性
+                indices = torch.randperm(query_edges.shape[1], device=device)[:num_samples]
+            else:
+                # 推理时：确定性采样（选择前N个）以保证可重复性
+                indices = torch.arange(num_samples, device=device)
             sampled_edges = query_edges[:, indices]
         else:
             sampled_edges = query_edges
@@ -227,8 +248,17 @@ class OptimizedPromptGraph(nn.Module):
         # 简化的编码 - 使用平均池化
         device = query_relation.device if hasattr(query_relation, 'device') else torch.device('cpu')
         
-        # 生成简单的节点嵌入
-        node_embeddings = torch.randn(prompt_graph.num_nodes, self.embedding_dim, device=device)
+        # 使用固定初始化而不是随机初始化，以保证推理时的可重复性
+        # 使用零初始化作为基础，这样在推理时是确定性的
+        # 如果需要学习到的嵌入，应该从模型的嵌入层获取，但这里为了简化使用固定值
+        if self.training:
+            # 训练时：使用随机初始化以增加多样性
+            node_embeddings = torch.randn(prompt_graph.num_nodes, self.embedding_dim, device=device)
+        else:
+            # 推理时：使用固定初始化（零向量）以保证可重复性
+            # 注意：这可能会影响性能，但保证了结果的一致性
+            # 更好的方案是使用学习到的节点嵌入，但需要修改模型结构
+            node_embeddings = torch.zeros(prompt_graph.num_nodes, self.embedding_dim, device=device)
         
         # 使用简化的编码器
         encoded_embeddings = self.prompt_encoder(node_embeddings)
@@ -259,6 +289,160 @@ class OptimizedPromptGraph(nn.Module):
         final_embedding = query_embedding + adaptive_weight * enhanced_embedding
         
         return final_embedding
+
+
+class AdaptiveEnhancementGate(nn.Module):
+    """
+    自适应增强门控网络
+    基于查询特征学习决定是否应该使用增强
+    """
+    
+    def __init__(self, embedding_dim=64):
+        super(AdaptiveEnhancementGate, self).__init__()
+        
+        self.embedding_dim = embedding_dim
+        
+        # 特征提取网络：输入关系嵌入、实体嵌入、图统计特征
+        # 特征维度：关系嵌入(64) + 实体嵌入(64) + 统计特征(4) = 132
+        self.feature_extractor = nn.Sequential(
+            nn.Linear(embedding_dim * 2 + 4, embedding_dim),
+            nn.ReLU(),
+            nn.Linear(embedding_dim, embedding_dim // 2),
+            nn.ReLU()
+        )
+        
+        # 门控网络：输出增强权重 (0-1之间)
+        self.gate_network = nn.Sequential(
+            nn.Linear(embedding_dim // 2, embedding_dim // 4),
+            nn.ReLU(),
+            nn.Linear(embedding_dim // 4, 1),
+            nn.Sigmoid()  # 输出0-1之间的增强权重
+        )
+        
+        # 初始化：默认倾向于使用增强（初始权重0.7）
+        # 这样模型可以从一个相对积极的增强策略开始学习
+        with torch.no_grad():
+            self.gate_network[-2].weight.data.fill_(0.0)
+            self.gate_network[-2].bias.data.fill_(0.85)  # sigmoid(0.85) ≈ 0.7
+    
+    def extract_graph_statistics(self, data, query_rels, query_entities):
+        """
+        提取图统计特征
+        Args:
+            data: 图数据对象
+            query_rels: [batch_size] 查询关系索引
+            query_entities: [batch_size] 查询实体索引
+        Returns:
+            stats: [batch_size, 4] 统计特征
+        """
+        batch_size = len(query_rels)
+        device = query_rels.device
+        stats = []
+        
+        # 预计算总边数，避免重复计算
+        total_edges = data.edge_index.shape[1] if data.edge_index.numel() > 0 else 1
+        total_relations = data.num_relations if hasattr(data, 'num_relations') else 1
+        
+        for i in range(batch_size):
+            rel_idx = query_rels[i].item()
+            entity_idx = query_entities[i].item()
+            
+            # 特征1: 关系频率（归一化）
+            if rel_idx < total_relations and total_edges > 0:
+                rel_mask = (data.edge_type == rel_idx)
+                rel_freq = rel_mask.sum().item()
+                rel_freq_norm = min(rel_freq / max(total_edges, 1), 1.0)
+            else:
+                rel_freq_norm = 0.0
+            
+            # 特征2: 实体度（归一化）
+            if entity_idx < data.num_nodes and total_edges > 0:
+                entity_mask = (data.edge_index[0] == entity_idx) | (data.edge_index[1] == entity_idx)
+                entity_degree = entity_mask.sum().item()
+                entity_degree_norm = min(entity_degree / max(total_edges, 1), 1.0)
+            else:
+                entity_degree_norm = 0.0
+            
+            # 特征3: 查询关系的平均相似度（与所有其他关系的相似度）
+            # 这里简化处理，使用关系频率作为代理
+            avg_similarity = rel_freq_norm
+            
+            # 特征4: 图的稀疏度（边数/节点数）
+            max_possible_edges = data.num_nodes * data.num_nodes if data.num_nodes > 0 else 1
+            graph_density = min(total_edges / max(max_possible_edges, 1), 1.0)
+            
+            stats.append([rel_freq_norm, entity_degree_norm, avg_similarity, graph_density])
+        
+        return torch.tensor(stats, device=device, dtype=torch.float32)
+    
+    def forward(self, relation_embeddings, query_rels, query_entities, data):
+        """
+        计算增强门控权重
+        Args:
+            relation_embeddings: [batch_size, num_relations, embedding_dim] 关系嵌入
+            query_rels: [batch_size] 查询关系索引
+            query_entities: [batch_size] 查询实体索引
+            data: 图数据对象
+        Returns:
+            gate_weights: [batch_size] 增强权重 (0-1之间)
+        """
+        batch_size = len(query_rels)
+        device = query_rels.device
+        
+        # 提取查询关系的嵌入
+        query_rel_embeddings = []
+        query_entity_embeddings = []
+        
+        for i in range(batch_size):
+            rel_idx = query_rels[i].item()
+            entity_idx = query_entities[i].item()
+            
+            # 获取查询关系嵌入（使用平均池化作为实体嵌入的代理）
+            if rel_idx < relation_embeddings.shape[1]:
+                rel_emb = relation_embeddings[i, rel_idx, :]  # [embedding_dim]
+            else:
+                rel_emb = torch.zeros(self.embedding_dim, device=device)
+            
+            # 对于实体嵌入，我们使用与该实体相关的所有关系的平均嵌入作为代理
+            # 这是一个简化，因为实体嵌入可能不在relation_embeddings中
+            if entity_idx < data.num_nodes:
+                entity_edge_mask = (data.edge_index[0] == entity_idx) | (data.edge_index[1] == entity_idx)
+                if entity_edge_mask.any():
+                    entity_rels = data.edge_type[entity_edge_mask]
+                    # 获取这些关系的嵌入并平均
+                    valid_rels = entity_rels[entity_rels < relation_embeddings.shape[1]]
+                    if len(valid_rels) > 0:
+                        entity_emb = relation_embeddings[i, valid_rels, :].mean(dim=0)
+                    else:
+                        entity_emb = torch.zeros(self.embedding_dim, device=device)
+                else:
+                    entity_emb = torch.zeros(self.embedding_dim, device=device)
+            else:
+                entity_emb = torch.zeros(self.embedding_dim, device=device)
+            
+            query_rel_embeddings.append(rel_emb)
+            query_entity_embeddings.append(entity_emb)
+        
+        query_rel_embeddings = torch.stack(query_rel_embeddings, dim=0)  # [batch_size, embedding_dim]
+        query_entity_embeddings = torch.stack(query_entity_embeddings, dim=0)  # [batch_size, embedding_dim]
+        
+        # 提取图统计特征
+        graph_stats = self.extract_graph_statistics(data, query_rels, query_entities)  # [batch_size, 4]
+        
+        # 拼接特征
+        features = torch.cat([
+            query_rel_embeddings,  # [batch_size, embedding_dim]
+            query_entity_embeddings,  # [batch_size, embedding_dim]
+            graph_stats  # [batch_size, 4]
+        ], dim=-1)  # [batch_size, embedding_dim * 2 + 4]
+        
+        # 提取特征
+        extracted_features = self.feature_extractor(features)  # [batch_size, embedding_dim // 2]
+        
+        # 计算门控权重
+        gate_weights = self.gate_network(extracted_features).squeeze(-1)  # [batch_size]
+        
+        return gate_weights
 
 
 class EnhancedUltra(nn.Module):
@@ -306,6 +490,13 @@ class EnhancedUltra(nn.Module):
             enhancement_strength_init=enhancement_strength_init
         )
         
+        # 自适应增强门控网络（根据配置决定是否启用）
+        self.use_adaptive_gate = getattr(flags, 'use_adaptive_gate', True)
+        if self.use_adaptive_gate:
+            self.enhancement_gate = AdaptiveEnhancementGate(embedding_dim=64)
+        else:
+            self.enhancement_gate = None
+        
         # 存储表示
         self.relation_representations_structural = None
         self.relation_representations_semantic = None
@@ -313,9 +504,10 @@ class EnhancedUltra(nn.Module):
         self.enhanced_relation_representations = None
         
     def forward(self, data, batch, is_tail=False):
-        """增强版前向传播"""
+        """增强版前向传播 - 根据配置使用自适应门控机制"""
         query_rels = batch[:, 0, 2]
         query_rels_traverse = batch[:, 0, :]
+        query_entities = batch[:, 0, 0]  # 查询实体（head）
         
         # 获取基础关系表示（使用原始逻辑）
         from ultra import parse
@@ -334,14 +526,44 @@ class EnhancedUltra(nn.Module):
             self.relation_representations_structural = self.relation_model(data, query=query_rels)
             self.final_relation_representations = self.relation_representations_structural
         
-        # 基于相似度的关系增强策略
-        # 在训练和推理时都使用，但强度较小，不会过度影响原模型
-        self.enhanced_relation_representations = self.similarity_enhancer(
-            self.final_relation_representations, 
-            query_rels
-        )
+        # 根据配置决定是否使用门控机制
+        if self.use_adaptive_gate and self.enhancement_gate is not None:
+            # 使用自适应门控机制：只获取增强增量，由门控机制控制混合
+            # 这样可以避免双重混合（消除 enhancement_strength 和 gate_weight 的冗余）
+            enhancement_delta = self.similarity_enhancer(
+                self.final_relation_representations, 
+                query_rels,
+                return_enhancement_only=True  # 只返回增强增量，不进行内部混合
+            )  # [batch_size, num_relations, embedding_dim]
+            
+            # 计算门控权重
+            gate_weights = self.enhancement_gate(
+                self.final_relation_representations,
+                query_rels,
+                query_entities,
+                data
+            )  # [batch_size]
+            
+            # 使用门控权重混合原始表示和增强增量
+            # final = original + gate_weight * enhancement_delta
+            # 这样门控权重直接控制增强强度，消除了与 enhancement_strength 的冗余
+            batch_size = len(query_rels)
+            gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
+            
+            # 混合：final = original + gate * delta
+            self.enhanced_relation_representations = (
+                self.final_relation_representations +
+                gate_weights_expanded * enhancement_delta
+            )
+        else:
+            # 不使用门控机制：使用内部 enhancement_strength 进行混合（原有逻辑）
+            self.enhanced_relation_representations = self.similarity_enhancer(
+                self.final_relation_representations, 
+                query_rels,
+                return_enhancement_only=False  # 使用内部strength进行混合
+            )
         
-        # 使用增强后的关系表示进行实体推理
+        # 使用最终的关系表示进行实体推理
         score = self.entity_model(data, self.enhanced_relation_representations, batch)
         
         return score
@@ -382,8 +604,11 @@ class EnhancedUltra(nn.Module):
                 enhanced_repr = base_repr
             
             # 策略2: 轻微噪声增强 - 增加鲁棒性
-            noise = torch.randn_like(base_repr) * 0.01
-            enhanced_repr += noise
+            # 在训练时使用随机噪声，在推理时禁用以保证可重复性
+            if self.training:
+                noise = torch.randn_like(base_repr) * 0.01
+                enhanced_repr += noise
+            # 推理时不添加噪声，保证结果可重复
             
             # 策略3: 残差保护 - 确保不偏离太远
             enhanced_repr = 0.95 * enhanced_repr + 0.05 * base_repr

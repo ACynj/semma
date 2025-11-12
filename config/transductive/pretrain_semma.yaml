@@ -1,4 +1,4 @@
-output_dir: ./output 
+output_dir: ./gate_train_output 
 
 dataset:
   class: JointDataset
