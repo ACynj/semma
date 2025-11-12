@@ -367,7 +367,7 @@ def find_checkpoint_path(dataset_name, base_checkpoint='ckpts/optuna_1.pth'):
     # 如果都找不到，返回基础checkpoint路径（即使不存在）
     return base_ckpt_path
 
-def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, num_samples=1000, device='cuda'):
+def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, num_samples=None, device='cuda'):
     """
     分析数据集样本级别的相似关系参考情况
     
@@ -375,7 +375,7 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
         dataset_name: 数据集名称
         dataset_type: 数据集类型
         checkpoint_path: 模型checkpoint路径（如果为None，会自动查找）
-        num_samples: 分析的样本数量
+        num_samples: 分析的样本数量（如果为None，分析所有测试样本）
         device: 设备
     """
     print(f"\n{'='*70}")
@@ -401,11 +401,15 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
     
     # 获取测试三元组
     test_triplets = torch.cat([test_data.target_edge_index, test_data.target_edge_type.unsqueeze(0)]).t()
+    total_test_samples = len(test_triplets)
     
-    # 限制样本数量
-    if len(test_triplets) > num_samples:
-        indices = torch.randperm(len(test_triplets))[:num_samples]
+    # 限制样本数量（如果指定了num_samples）
+    if num_samples is not None and total_test_samples > num_samples:
+        indices = torch.randperm(total_test_samples)[:num_samples]
         test_triplets = test_triplets[indices]
+        print(f"⚠️  限制分析样本数量为: {num_samples} (总测试样本数: {total_test_samples})")
+    else:
+        print(f"📊 分析所有测试样本: {total_test_samples} 个")
     
     # 获取训练三元组（用于有效性检查）
     train_triplets = torch.cat([train_data.edge_index, train_data.edge_type.unsqueeze(0)]).t()
@@ -640,7 +644,7 @@ def main():
                 dataset_name=dataset_name,
                 dataset_type=dataset_type,
                 checkpoint_path=None,  # 使用默认路径
-                num_samples=500,  # 每个数据集分析500个样本
+                num_samples=None,  # 分析所有测试样本
                 device=device
             )
             if result:
