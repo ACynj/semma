@@ -204,6 +204,16 @@ def find_similar_relations(model, data, query_rel_idx, threshold=0.8, device='cu
     model.eval()
     with torch.no_grad():
         try:
+            # 确保data在正确的设备上
+            if hasattr(data, 'to'):
+                data = data.to(device)
+            elif hasattr(data, 'keys'):
+                # 如果data是Data对象，需要移动所有tensor属性
+                for key in data.keys:
+                    if isinstance(getattr(data, key), torch.Tensor):
+                        setattr(data, key, getattr(data, key).to(device))
+            # 如果data已经是torch_geometric.data.Data对象，它应该已经有to方法
+            
             # 获取关系表示
             query_rels = torch.tensor([query_rel_idx], device=device)
             
@@ -385,6 +395,10 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
     # 加载模型（使用EnhancedUltra，因为ARE就是EnhanceUltra）
     model = load_model(checkpoint_path, dataset, device)
     
+    # 确保数据在正确的设备上
+    test_data = test_data.to(device)
+    train_data = train_data.to(device)
+    
     # 获取测试三元组
     test_triplets = torch.cat([test_data.target_edge_index, test_data.target_edge_type.unsqueeze(0)]).t()
     
@@ -427,7 +441,7 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
         
         stats['total_samples'] += 1
         
-        # 找到相似关系
+        # 找到相似关系（test_data已经在device上了）
         similar_rels = find_similar_relations(model, test_data, r, threshold=threshold, device=device)
         
         if len(similar_rels) == 0:
