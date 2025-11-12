@@ -256,7 +256,7 @@ def find_similar_relations(model, data, query_rel_idx, threshold=0.8, device='cu
 
 def check_reference_effectiveness(similar_rels, train_triples, test_triple, entity_vocab, relation_vocab):
     """
-    检查相似关系的有效性
+    检查相似关系的有效性（改进版：使用有效性分数进行量化）
     
     Args:
         similar_rels: list of (rel_idx, similarity) tuples
@@ -266,8 +266,8 @@ def check_reference_effectiveness(similar_rels, train_triples, test_triple, enti
         relation_vocab: relation vocabulary
     
     Returns:
-        effective_refs: list of effective reference relations
-        noise_refs: list of noise reference relations
+        effective_refs: list of (rel_idx, similarity, effectiveness_score, reason) tuples
+        noise_refs: list of (rel_idx, similarity) tuples
     """
     test_h, test_r, test_t = test_triple
     
@@ -284,34 +284,68 @@ def check_reference_effectiveness(similar_rels, train_triples, test_triple, enti
     effective_refs = []
     noise_refs = []
     
+    # 有效性阈值：只有分数 >= 0.3 才算有效
+    effectiveness_threshold = 0.3
+    
     # 检查每个相似关系
     for rel_idx, similarity in similar_rels:
-        # 检查这个相似关系是否在训练数据中出现，并且能帮助预测
-        # 对于tail预测：检查(h, similar_rel)是否在训练数据中出现
-        # 对于head预测：检查(similar_rel, t)是否在训练数据中出现
+        tail_score = 0.0
+        head_score = 0.0
+        tail_reason = ""
+        head_reason = ""
         
-        # Tail预测有效性
-        tail_effective = False
+        # ========== Tail预测有效性评分 ==========
         if (test_h, rel_idx) in train_tail_contexts:
-            # 如果相似关系在训练数据中出现，并且预测的tail也在其中，则有效
-            if test_t in train_tail_contexts[(test_h, rel_idx)]:
-                tail_effective = True
-            # 或者，如果相似关系在训练数据中出现，即使预测的tail不在其中，也可能有帮助
-            elif len(train_tail_contexts[(test_h, rel_idx)]) > 0:
-                tail_effective = True  # 至少提供了上下文信息
+            candidate_tails = train_tail_contexts[(test_h, rel_idx)]
+            candidate_size = len(candidate_tails)
+            
+            # 情况1：直接匹配（最高分）
+            if test_t in candidate_tails:
+                # 直接匹配：分数 = 1.0 * 相似度权重
+                # 候选集合越小，匹配价值越高（信息更精确）
+                size_factor = 1.0 / (1.0 + np.log10(max(candidate_size, 1)))
+                tail_score = 1.0 * similarity * size_factor
+                tail_reason = f"direct_match(size={candidate_size})"
+            else:
+                # 情况2：提供候选集合但test_t不在其中
+                # 分数 = 基础分 * 相似度权重 * 候选集合质量
+                if candidate_size > 0:
+                    # 候选集合越小，价值越高（更精确的约束）
+                    # 但因为没有直接匹配，分数较低
+                    size_factor = 1.0 / (1.0 + np.log10(candidate_size))
+                    # 基础分：0.4（提供上下文但未直接匹配）
+                    base_score = 0.4
+                    tail_score = base_score * similarity * size_factor
+                    tail_reason = f"context_only(size={candidate_size})"
         
-        # Head预测有效性
-        head_effective = False
+        # ========== Head预测有效性评分 ==========
         if (rel_idx, test_t) in train_head_contexts:
-            if test_h in train_head_contexts[(rel_idx, test_t)]:
-                head_effective = True
-            elif len(train_head_contexts[(rel_idx, test_t)]) > 0:
-                head_effective = True
+            candidate_heads = train_head_contexts[(rel_idx, test_t)]
+            candidate_size = len(candidate_heads)
+            
+            # 情况1：直接匹配（最高分）
+            if test_h in candidate_heads:
+                size_factor = 1.0 / (1.0 + np.log10(max(candidate_size, 1)))
+                head_score = 1.0 * similarity * size_factor
+                head_reason = f"direct_match(size={candidate_size})"
+            else:
+                # 情况2：提供候选集合但test_h不在其中
+                if candidate_size > 0:
+                    size_factor = 1.0 / (1.0 + np.log10(candidate_size))
+                    base_score = 0.4
+                    head_score = base_score * similarity * size_factor
+                    head_reason = f"context_only(size={candidate_size})"
         
-        if tail_effective or head_effective:
-            effective_refs.append((rel_idx, similarity, 'tail' if tail_effective else 'head'))
+        # 选择tail和head中分数更高的作为最终分数
+        max_score = max(tail_score, head_score)
+        best_reason = tail_reason if tail_score >= head_score else head_reason
+        direction = 'tail' if tail_score >= head_score else 'head'
+        
+        # 判断是否有效
+        if max_score >= effectiveness_threshold:
+            effective_refs.append((rel_idx, similarity, max_score, direction, best_reason))
         else:
-            noise_refs.append((rel_idx, similarity))
+            noise_refs.append((rel_idx, similarity, max_score))  # 也记录分数，便于分析
     
     return effective_refs, noise_refs
 
@@ -430,6 +464,9 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
         'noise_references': 0,
         'samples_with_effective_refs': 0,
         'samples_with_only_noise': 0,
+        'total_effectiveness_score': 0.0,  # 总有效性分数
+        'direct_match_count': 0,  # 直接匹配的数量
+        'context_only_count': 0,  # 仅提供上下文的数量
     }
     
     sample_results = []
@@ -472,6 +509,25 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
         stats['effective_references'] += len(effective_refs)
         stats['noise_references'] += len(noise_refs)
         
+        # 统计有效性分数和匹配类型
+        for ref in effective_refs:
+            # ref格式: (rel_idx, similarity, max_score, direction, reason)
+            if len(ref) >= 5:
+                score = ref[2]
+                reason = ref[4]
+                stats['total_effectiveness_score'] += score
+                if 'direct_match' in reason:
+                    stats['direct_match_count'] += 1
+                elif 'context_only' in reason:
+                    stats['context_only_count'] += 1
+        
+        # 也统计噪音的分数（虽然它们低于阈值）
+        for ref in noise_refs:
+            # ref格式: (rel_idx, similarity, max_score)
+            if len(ref) >= 3:
+                score = ref[2]
+                stats['total_effectiveness_score'] += score  # 也计入总分，用于计算平均值
+        
         if len(effective_refs) > 0:
             stats['samples_with_effective_refs'] += 1
         
@@ -500,6 +556,32 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
     if stats['total_references'] > 0:
         stats['reference_effectiveness'] = stats['effective_references'] / stats['total_references']
         stats['reference_noise_ratio'] = stats['noise_references'] / stats['total_references']
+        # 平均有效性分数
+        stats['avg_effectiveness_score'] = stats['total_effectiveness_score'] / stats['total_references']
+    else:
+        stats['avg_effectiveness_score'] = 0.0
+    
+    if stats['effective_references'] > 0:
+        # 从sample_results中提取所有有效参考的分数
+        all_effective_scores = []
+        for sample_result in sample_results:
+            if 'effective_refs' in sample_result:
+                for ref in sample_result['effective_refs']:
+                    if len(ref) >= 3:
+                        all_effective_scores.append(ref[2])
+        
+        if len(all_effective_scores) > 0:
+            stats['avg_effective_score'] = sum(all_effective_scores) / len(all_effective_scores)
+        else:
+            stats['avg_effective_score'] = 0.0
+        
+        # 直接匹配比例
+        stats['direct_match_ratio'] = stats['direct_match_count'] / stats['effective_references']
+        stats['context_only_ratio'] = stats['context_only_count'] / stats['effective_references']
+    else:
+        stats['avg_effective_score'] = 0.0
+        stats['direct_match_ratio'] = 0.0
+        stats['context_only_ratio'] = 0.0
     
     # 打印统计结果
     print(f"\n📈 统计结果:")
@@ -510,6 +592,11 @@ def analyze_dataset_samples(dataset_name, dataset_type, checkpoint_path=None, nu
     print(f"  噪音参考数: {stats['noise_references']} ({stats.get('reference_noise_ratio', 0)*100:.2f}%)")
     print(f"  有有效参考的样本数: {stats['samples_with_effective_refs']} ({stats.get('effective_rate', 0)*100:.2f}%)")
     print(f"  只有噪音的样本数: {stats['samples_with_only_noise']} ({stats.get('noise_rate', 0)*100:.2f}%)")
+    print(f"\n📊 有效性量化指标:")
+    print(f"  平均有效性分数: {stats.get('avg_effectiveness_score', 0):.4f} (所有参考)")
+    print(f"  有效参考平均分数: {stats.get('avg_effective_score', 0):.4f} (仅有效参考)")
+    print(f"  直接匹配数: {stats['direct_match_count']} ({stats.get('direct_match_ratio', 0)*100:.2f}% of effective)")
+    print(f"  仅上下文数: {stats['context_only_count']} ({stats.get('context_only_ratio', 0)*100:.2f}% of effective)")
     
     return {
         'dataset_name': dataset_name,
@@ -682,6 +769,13 @@ def main():
                 'effective_rate': stats.get('effective_rate', 0),
                 'samples_with_only_noise': stats['samples_with_only_noise'],
                 'noise_rate': stats.get('noise_rate', 0),
+                # 新增量化指标
+                'avg_effectiveness_score': stats.get('avg_effectiveness_score', 0),
+                'avg_effective_score': stats.get('avg_effective_score', 0),
+                'direct_match_count': stats.get('direct_match_count', 0),
+                'direct_match_ratio': stats.get('direct_match_ratio', 0),
+                'context_only_count': stats.get('context_only_count', 0),
+                'context_only_ratio': stats.get('context_only_ratio', 0),
             })
         
         df_results = pd.DataFrame(rows)
