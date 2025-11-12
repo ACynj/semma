@@ -12,10 +12,10 @@ gpus: [0] # [0, 1, 2] # which gpu to use
 harder_setting: False # [True, False], if True, we use harder setting where there are new relations 
 is-inverse-relation-classify: False # [True, False], if True, use relation type classification for inverse relation embeddings
 # KG-ICL Prompt Enhancement Settings
-use_kg_icl_prompt: False # [True, False], if True, use KG-ICL style prompt enhancement
-use_kg_icl_in_training: False # [True, False], if True, also use KG-ICL during training (like original KG-ICL paper)
+use_kg_icl_prompt: True # [True, False], if True, use KG-ICL style prompt enhancement
+use_kg_icl_in_training: True # [True, False], if True, also use KG-ICL during training (like original KG-ICL paper)
 prompt_num_examples: 2 # number of example triples to use in prompt graph (reduced from 3 to save memory)
-prompt_max_hops: 1 # maximum hops for neighbor expansion in prompt graph (reduced from 2 to save memory)
+prompt_max_hops: 2 # maximum hops for neighbor expansion in prompt graph (reduced from 2 to save memory)
 prompt_num_layers: 1 # number of layers in prompt encoder (reduced from 2 to save memory)
 # Base paths configuration
 base_path: /T20030104/ynj/semma # Base directory path for the project
