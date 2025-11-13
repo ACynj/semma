@@ -6,8 +6,7 @@ import torch.nn.functional as F # Added for softmax
 from ultra.parse import parse_args
 from . import tasks, layers
 from ultra.base_nbfnet import BaseNBFNet
-from ultra import parse 
-from ultra.kg_icl_prompt import KGICLPromptEnhancer
+from ultra import parse
 
 mydir = os.getcwd()
 flags = parse.load_flags(os.path.join(mydir, "flags.yaml"))
@@ -78,17 +77,6 @@ class Ultra(nn.Module):
         self.relation_representations_structural = None
         self.relation_representations_semantic = None
         self.final_relation_representations = None
-        
-        # KG-ICL Prompt Enhancement
-        if hasattr(flags, 'use_kg_icl_prompt') and flags.use_kg_icl_prompt:
-            self.kg_icl_enhancer = KGICLPromptEnhancer(
-                hidden_dim=64,
-                num_prompt_layers=getattr(flags, 'prompt_num_layers', 2),
-                num_examples=getattr(flags, 'prompt_num_examples', 3),
-                max_hops=getattr(flags, 'prompt_max_hops', 2)
-            )
-        else:
-            self.kg_icl_enhancer = None
 
     def get_relation_representations(self):
         return self.relation_representations_structural, self.relation_representations_semantic, self.final_relation_representations
@@ -242,34 +230,6 @@ class Ultra(nn.Module):
         #     print(self.final_relation_representations.shape)
         #     print("================================================")
         #     exit()
-        
-        # Apply KG-ICL Prompt Enhancement
-        # Check if we should use prompt enhancement:
-        # - Always use during inference (not self.training)
-        # - Use during training if use_kg_icl_in_training flag is True
-        use_prompt = self.kg_icl_enhancer is not None and (
-            not self.training or 
-            getattr(flags, 'use_kg_icl_in_training', False)
-        )
-        
-        if use_prompt:
-            try:
-                # Extract query heads from batch
-                # batch shape: (bs, 1+num_negs, 3) where 3 is (head, tail, relation)
-                query_heads = batch[:, 0, 0]  # Get head entities from positive samples
-                
-                # Apply prompt enhancement to relation representations
-                self.final_relation_representations = self.kg_icl_enhancer(
-                    data, 
-                    query_rels, 
-                    query_heads, 
-                    self.final_relation_representations
-                )
-            except Exception as e:
-                # If enhancement fails, fall back to original representations
-                mode = "training" if self.training else "inference"
-                print(f"Warning: KG-ICL prompt enhancement failed during {mode}: {e}")
-                pass
         
         score = self.entity_model(data, self.final_relation_representations, batch)
         # if is_tail == True:
