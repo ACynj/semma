@@ -472,30 +472,47 @@ class EnhancedUltra(nn.Module):
             self.semantic_model = SemRelNBFNet(**sem_model_cfg)
             self.combiner = CombineEmbeddings(embedding_dim=64)
         
-        # 提示图增强模块（保留原有功能）
-        self.prompt_enhancer = OptimizedPromptGraph(
-            embedding_dim=64,
-            max_hops=2,  # 减少跳数
-            num_prompt_samples=3  # 减少样本数
-        )
+        # 消融实验配置：控制各组件的启用/禁用
+        self.use_similarity_enhancer = getattr(flags, 'use_similarity_enhancer', True)
+        self.use_prompt_enhancer = getattr(flags, 'use_prompt_enhancer', False)
+        self.use_adaptive_gate = getattr(flags, 'use_adaptive_gate', False)
         
-        # 基于相似度的关系增强模块（新增）
-        # 从flags.yaml读取初始值，如果没有则使用默认值
-        similarity_threshold_init = getattr(flags, 'similarity_threshold_init', 0.8)
-        enhancement_strength_init = getattr(flags, 'enhancement_strength_init', 0.05)
+        # 提示图增强模块（保留原有功能，可通过配置禁用）
+        if self.use_prompt_enhancer:
+            self.prompt_enhancer = OptimizedPromptGraph(
+                embedding_dim=64,
+                max_hops=2,  # 减少跳数
+                num_prompt_samples=3  # 减少样本数
+            )
+        else:
+            self.prompt_enhancer = None
         
-        self.similarity_enhancer = SimilarityBasedRelationEnhancer(
-            embedding_dim=64,
-            similarity_threshold_init=similarity_threshold_init,
-            enhancement_strength_init=enhancement_strength_init
-        )
+        # 基于相似度的关系增强模块（新增，可通过配置禁用）
+        if self.use_similarity_enhancer:
+            # 从flags.yaml读取初始值，如果没有则使用默认值
+            similarity_threshold_init = getattr(flags, 'similarity_threshold_init', 0.8)
+            enhancement_strength_init = getattr(flags, 'enhancement_strength_init', 0.05)
+            
+            self.similarity_enhancer = SimilarityBasedRelationEnhancer(
+                embedding_dim=64,
+                similarity_threshold_init=similarity_threshold_init,
+                enhancement_strength_init=enhancement_strength_init
+            )
+        else:
+            self.similarity_enhancer = None
         
         # 自适应增强门控网络（根据配置决定是否启用）
-        self.use_adaptive_gate = getattr(flags, 'use_adaptive_gate', True)
-        if self.use_adaptive_gate:
+        # 注意：门控网络需要配合相似度增强器使用
+        if self.use_adaptive_gate and self.use_similarity_enhancer:
             self.enhancement_gate = AdaptiveEnhancementGate(embedding_dim=64)
         else:
             self.enhancement_gate = None
+            # 如果启用了门控但没有启用相似度增强，发出警告
+            if self.use_adaptive_gate and not self.use_similarity_enhancer:
+                import warnings
+                warnings.warn("use_adaptive_gate=True but use_similarity_enhancer=False. "
+                            "Adaptive gate requires similarity enhancer, disabling gate.")
+                self.use_adaptive_gate = False
         
         # 存储表示
         self.relation_representations_structural = None
@@ -526,42 +543,72 @@ class EnhancedUltra(nn.Module):
             self.relation_representations_structural = self.relation_model(data, query=query_rels)
             self.final_relation_representations = self.relation_representations_structural
         
-        # 根据配置决定是否使用门控机制
-        if self.use_adaptive_gate and self.enhancement_gate is not None:
-            # 使用自适应门控机制：只获取增强增量，由门控机制控制混合
-            # 这样可以避免双重混合（消除 enhancement_strength 和 gate_weight 的冗余）
-            enhancement_delta = self.similarity_enhancer(
-                self.final_relation_representations, 
-                query_rels,
-                return_enhancement_only=True  # 只返回增强增量，不进行内部混合
-            )  # [batch_size, num_relations, embedding_dim]
-            
-            # 计算门控权重
-            gate_weights = self.enhancement_gate(
-                self.final_relation_representations,
-                query_rels,
-                query_entities,
-                data
-            )  # [batch_size]
-            
-            # 使用门控权重混合原始表示和增强增量
-            # final = original + gate_weight * enhancement_delta
-            # 这样门控权重直接控制增强强度，消除了与 enhancement_strength 的冗余
-            batch_size = len(query_rels)
-            gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
-            
-            # 混合：final = original + gate * delta
-            self.enhanced_relation_representations = (
-                self.final_relation_representations +
-                gate_weights_expanded * enhancement_delta
-            )
+        # 应用增强模块（根据消融实验配置）
+        # 首先应用相似度增强（如果启用）
+        if self.use_similarity_enhancer and self.similarity_enhancer is not None:
+            # 根据配置决定是否使用门控机制
+            if self.use_adaptive_gate and self.enhancement_gate is not None:
+                # 使用自适应门控机制：只获取增强增量，由门控机制控制混合
+                # 这样可以避免双重混合（消除 enhancement_strength 和 gate_weight 的冗余）
+                enhancement_delta = self.similarity_enhancer(
+                    self.final_relation_representations, 
+                    query_rels,
+                    return_enhancement_only=True  # 只返回增强增量，不进行内部混合
+                )  # [batch_size, num_relations, embedding_dim]
+                
+                # 计算门控权重
+                gate_weights = self.enhancement_gate(
+                    self.final_relation_representations,
+                    query_rels,
+                    query_entities,
+                    data
+                )  # [batch_size]
+                
+                # 使用门控权重混合原始表示和增强增量
+                # final = original + gate_weight * enhancement_delta
+                # 这样门控权重直接控制增强强度，消除了与 enhancement_strength 的冗余
+                batch_size = len(query_rels)
+                gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
+                
+                # 混合：final = original + gate * delta
+                self.enhanced_relation_representations = (
+                    self.final_relation_representations +
+                    gate_weights_expanded * enhancement_delta
+                )
+            else:
+                # 不使用门控机制：使用内部 enhancement_strength 进行混合（原有逻辑）
+                self.enhanced_relation_representations = self.similarity_enhancer(
+                    self.final_relation_representations, 
+                    query_rels,
+                    return_enhancement_only=False  # 使用内部strength进行混合
+                )
         else:
-            # 不使用门控机制：使用内部 enhancement_strength 进行混合（原有逻辑）
-            self.enhanced_relation_representations = self.similarity_enhancer(
-                self.final_relation_representations, 
-                query_rels,
-                return_enhancement_only=False  # 使用内部strength进行混合
-            )
+            # 如果没有启用相似度增强，直接使用原始表示
+            self.enhanced_relation_representations = self.final_relation_representations
+        
+        # 然后应用提示图增强（如果启用且相似度增强未启用，或两者都启用）
+        # 注意：如果同时启用，提示图增强会在相似度增强之后应用
+        if self.use_prompt_enhancer and self.prompt_enhancer is not None:
+            # 对每个查询应用提示图增强
+            batch_size = len(query_rels)
+            enhanced_reprs = []
+            
+            for i in range(batch_size):
+                query_rel = query_rels[i]
+                query_entity = query_entities[i]
+                base_repr = self.enhanced_relation_representations[i, query_rel, :]  # [embedding_dim]
+                
+                # 应用提示图增强
+                enhanced_repr = self.prompt_enhancer(
+                    data, query_rel, query_entity, base_repr
+                )  # [embedding_dim]
+                
+                # 更新该查询关系的表示
+                enhanced_batch = self.enhanced_relation_representations[i].clone()
+                enhanced_batch[query_rel] = enhanced_repr
+                enhanced_reprs.append(enhanced_batch)
+            
+            self.enhanced_relation_representations = torch.stack(enhanced_reprs, dim=0)
         
         # 使用最终的关系表示进行实体推理
         score = self.entity_model(data, self.enhanced_relation_representations, batch)

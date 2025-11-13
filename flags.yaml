@@ -1,4 +1,4 @@
-run: semma # [ultra, semma, EnhancedUltra] Model type to use
+run: EnhancedUltra # [ultra, semma, EnhancedUltra] Model type to use
 LLM: gpt4o # [gpt4o, qwen3-32b, deepseekv3]
 rg2_embedding: combined-sum # ["combined", "combined-sum", "no llm", "llm name", "llm description"]
 k: 0 # should be positive if you want to add specific num of 5th type edges to each relation
@@ -22,3 +22,6 @@ similarity_threshold_init: 0.85
 enhancement_strength_init: 0.09
 # Adaptive Enhancement Gate Settings
 use_adaptive_gate: False # [True, False], if True, use adaptive gate to learn when to apply enhancement
+# Ablation Study Settings (for EnhancedUltra)
+use_similarity_enhancer: True # [True, False], if True, use similarity-based relation enhancer
+use_prompt_enhancer: False # [True, False], if True, use prompt graph enhancer
