@@ -50,8 +50,17 @@ def load_dataset(dataset_name, dataset_type="transductive"):
         'FB15K237Inductive:v1': 'FB15k237Inductive',  # 注意：小写k
         'FB15K237Inductive:v2': 'FB15k237Inductive',
         'FB15K237Inductive:v3': 'FB15k237Inductive',
+        'FB15K237Inductive:v4': 'FB15k237Inductive',
+        'WN18RRInductive:v3': 'WN18RRInductive',
         'NELLInductive:v1': 'NELLInductive',
         'NELLInductive:v3': 'NELLInductive',
+        'NELLInductive:v4': 'NELLInductive',
+        'WKIngram:25': 'WKIngram',
+        'NLIngram:25': 'NLIngram',
+        'NLIngram:75': 'NLIngram',
+        'Metafam': 'Metafam',
+        'WikiTopicsMT1:health': 'WikiTopicsMT1',
+        'WikiTopicsMT3:infra': 'WikiTopicsMT3',
     }
     
     # 获取实际的数据集类名
@@ -64,7 +73,18 @@ def load_dataset(dataset_name, dataset_type="transductive"):
         if len(parts) == 2:
             # 如果已经在mapping中，不要覆盖
             if dataset_name not in dataset_name_mapping:
-                actual_dataset_name = parts[0]
+                # 对于FB15K237Inductive系列，统一使用小写k的类名
+                base_name = parts[0]
+                if base_name == 'FB15K237Inductive':
+                    actual_dataset_name = 'FB15k237Inductive'
+                elif base_name in ['WKIngram', 'NLIngram']:
+                    # WKIngram和NLIngram需要版本号
+                    actual_dataset_name = base_name
+                elif base_name.startswith('WikiTopicsMT'):
+                    # WikiTopicsMT系列需要版本号
+                    actual_dataset_name = base_name
+                else:
+                    actual_dataset_name = base_name
             version = parts[1]
     
     # 获取数据集路径
@@ -371,7 +391,7 @@ def find_checkpoint_path(dataset_name, base_checkpoint='ckpts/optuna_1.pth'):
     # 尝试在optuna_1_output中查找数据集特定的checkpoint
     output_dir = os.path.join(base_path, 'optuna_1_output', 'Ultra')
     
-    # 数据集名称映射
+    # 数据集名称映射（与load_dataset中的映射保持一致）
     dataset_name_mapping = {
         'YAGO310-ht': 'YAGO310',
         'ConceptNet 100k-ht': 'ConceptNet100k',
@@ -380,11 +400,36 @@ def find_checkpoint_path(dataset_name, base_checkpoint='ckpts/optuna_1.pth'):
         'FB15K237Inductive:v1': 'FB15k237Inductive',
         'FB15K237Inductive:v2': 'FB15k237Inductive',
         'FB15K237Inductive:v3': 'FB15k237Inductive',
+        'FB15K237Inductive:v4': 'FB15k237Inductive',
+        'WN18RRInductive:v3': 'WN18RRInductive',
         'NELLInductive:v1': 'NELLInductive',
         'NELLInductive:v3': 'NELLInductive',
+        'NELLInductive:v4': 'NELLInductive',
+        'WKIngram:25': 'WKIngram',
+        'NLIngram:25': 'NLIngram',
+        'NLIngram:75': 'NLIngram',
+        'Metafam': 'Metafam',
+        'WikiTopicsMT1:health': 'WikiTopicsMT1',
+        'WikiTopicsMT3:infra': 'WikiTopicsMT3',
     }
     
-    mapped_name = dataset_name_mapping.get(dataset_name, dataset_name)
+    # 如果不在映射中，尝试处理版本号
+    if dataset_name not in dataset_name_mapping and ':' in dataset_name:
+        parts = dataset_name.split(':')
+        if len(parts) == 2:
+            base_name = parts[0]
+            if base_name == 'FB15K237Inductive':
+                mapped_name = 'FB15k237Inductive'
+            elif base_name in ['WKIngram', 'NLIngram']:
+                mapped_name = base_name
+            elif base_name.startswith('WikiTopicsMT'):
+                mapped_name = base_name
+            else:
+                mapped_name = dataset_name_mapping.get(dataset_name, dataset_name)
+        else:
+            mapped_name = dataset_name_mapping.get(dataset_name, dataset_name)
+    else:
+        mapped_name = dataset_name_mapping.get(dataset_name, dataset_name)
     
     # 查找数据集文件夹
     dataset_output_dir = os.path.join(output_dir, mapped_name)
@@ -713,22 +758,22 @@ def main():
     print(f"📊 找到 {len(improved)} 个显著提升的数据集")
     print(f"📊 找到 {len(degraded)} 个显著下降的数据集")
     
-    # 选择几个代表性的数据集进行分析
+    # 分析所有显著提升和下降的数据集
     key_datasets = []
     
-    # 显著提升的数据集
-    for _, row in improved.head(5).iterrows():
+    # 显著提升的数据集（全部）
+    for _, row in improved.iterrows():
         dataset_name = row['dataset']
         dataset_type = row['dataset_type']
         key_datasets.append((dataset_name, dataset_type, 'improved'))
     
-    # 显著下降的数据集
-    for _, row in degraded.head(5).iterrows():
+    # 显著下降的数据集（全部）
+    for _, row in degraded.iterrows():
         dataset_name = row['dataset']
         dataset_type = row['dataset_type']
         key_datasets.append((dataset_name, dataset_type, 'degraded'))
     
-    print(f"\n🔍 将分析 {len(key_datasets)} 个数据集")
+    print(f"\n🔍 将分析所有 {len(key_datasets)} 个数据集")
     
     # 分析每个数据集
     all_results = []

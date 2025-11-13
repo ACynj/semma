@@ -116,7 +116,12 @@ def build_dataset(cfg):
         dataset = ds_cls(**data_config, dataset_name=cls, dataset_version=version)
 
     if get_rank() == 0:
-        logger.warning("%s dataset" % (cls if "version" not in cfg.dataset else f'{cls}({cfg.dataset.version})'))
+        # 兼容字典和对象两种形式
+        if isinstance(cfg.dataset, dict):
+            version_str = f'{cls}({cfg.dataset["version"]})' if "version" in cfg.dataset else cls
+        else:
+            version_str = f'{cls}({cfg.dataset.version})' if hasattr(cfg.dataset, 'version') and cfg.dataset.version else cls
+        logger.warning("%s dataset" % version_str)
         if cls != "JointDataset":
             logger.warning("#train: %d, #valid: %d, #test: %d" %
                         (dataset[0].target_edge_index.shape[1], dataset[1].target_edge_index.shape[1],
