@@ -751,27 +751,45 @@ def main():
     
     df = pd.read_csv(csv_path)
     
-    # 筛选显著提升和下降的数据集
-    improved = df[df['performance_category'] == 'significantly_improved']
-    degraded = df[df['performance_category'] == 'significantly_degraded']
+    # 筛选显著提升和下降的数据集，且只选择Inductive(e,r)类型
+    improved = df[(df['performance_category'] == 'significantly_improved') & (df['dataset_type'] == 'Inductive(e,r)')]
+    degraded = df[(df['performance_category'] == 'significantly_degraded') & (df['dataset_type'] == 'Inductive(e,r)')]
     
-    print(f"📊 找到 {len(improved)} 个显著提升的数据集")
-    print(f"📊 找到 {len(degraded)} 个显著下降的数据集")
+    print(f"📊 找到 {len(improved)} 个显著提升的Inductive(e,r)数据集")
+    print(f"📊 找到 {len(degraded)} 个显著下降的Inductive(e,r)数据集")
     
-    # 分析所有显著提升和下降的数据集
+    # 分析所有显著提升和下降的Inductive(e,r)数据集
     key_datasets = []
     
-    # 显著提升的数据集（全部）
+    # 显著提升的数据集（只包含Inductive(e,r)）
     for _, row in improved.iterrows():
         dataset_name = row['dataset']
         dataset_type = row['dataset_type']
         key_datasets.append((dataset_name, dataset_type, 'improved'))
     
-    # 显著下降的数据集（全部）
+    # 显著下降的数据集（只包含Inductive(e,r)）
     for _, row in degraded.iterrows():
         dataset_name = row['dataset']
         dataset_type = row['dataset_type']
         key_datasets.append((dataset_name, dataset_type, 'degraded'))
+    
+    # 额外添加用户指定的数据集（即使它们被标记为stable，但变化较大）
+    additional_datasets = {
+        'WikiTopicsMT2:sci': 'degraded',  # 下降较多
+        'NLIngram:0': 'degraded',  # 下降较多
+        'WikiTopicsMT1:tax': 'improved',  # 提升较多
+        'WikiTopicsMT3:art': 'improved',  # 提升较多
+    }
+    
+    for dataset_name, category in additional_datasets.items():
+        # 检查数据集是否存在且是Inductive(e,r)类型
+        dataset_row = df[(df['dataset'] == dataset_name) & (df['dataset_type'] == 'Inductive(e,r)')]
+        if len(dataset_row) > 0:
+            dataset_type = dataset_row.iloc[0]['dataset_type']
+            # 检查是否已经添加过（避免重复）
+            if (dataset_name, dataset_type, category) not in key_datasets:
+                key_datasets.append((dataset_name, dataset_type, category))
+                print(f"➕ 额外添加数据集: {dataset_name} ({category})")
     
     print(f"\n🔍 将分析所有 {len(key_datasets)} 个数据集")
     
