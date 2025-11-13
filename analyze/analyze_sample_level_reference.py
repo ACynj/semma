@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
+import logging
 
 # 添加项目路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,7 +43,6 @@ def load_dataset(dataset_name, dataset_type="transductive"):
     
     # 处理数据集名称映射
     dataset_name_mapping = {
-        'NELL995-ht': 'NELL995',
         'YAGO310-ht': 'YAGO310',
         'ConceptNet 100k-ht': 'ConceptNet100k',
         'WDsinger-ht': 'WDsinger',
@@ -373,7 +373,6 @@ def find_checkpoint_path(dataset_name, base_checkpoint='ckpts/optuna_1.pth'):
     
     # 数据集名称映射
     dataset_name_mapping = {
-        'NELL995-ht': 'NELL995',
         'YAGO310-ht': 'YAGO310',
         'ConceptNet 100k-ht': 'ConceptNet100k',
         'WDsinger-ht': 'WDsinger',
@@ -689,6 +688,16 @@ def visualize_results(all_results, output_dir='analyze/figures'):
 
 def main():
     """主函数"""
+    # 配置日志
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('analyze/output_log.txt'),
+            logging.StreamHandler()
+        ]
+    )
+
     # 读取显著提升和下降的数据集
     csv_path = 'analyze/common_features_analysis.csv'
     if not os.path.exists(csv_path):
