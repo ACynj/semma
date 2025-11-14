@@ -268,8 +268,22 @@ class OptimizedPromptGraph(nn.Module):
         
         return context_embedding
     
-    def forward(self, data, query_relation, query_entity, base_embeddings):
-        """优化的前向传播"""
+    def forward(self, data, query_relation, query_entity, base_embeddings, return_enhancement_only=False):
+        """
+        优化的前向传播
+        
+        Args:
+            data: 图数据
+            query_relation: 查询关系索引
+            query_entity: 查询实体索引
+            base_embeddings: 基础嵌入表示
+            return_enhancement_only: 如果为True，只返回增强增量（不进行内部混合），
+                                    由外部权重控制混合；如果为False，使用内部adaptive_weight进行混合
+        
+        Returns:
+            如果 return_enhancement_only=True，返回增强增量
+            如果 return_enhancement_only=False，返回增强后的完整表示
+        """
         # 快速生成提示图
         prompt_graph = self.generate_prompt_graph(data, query_relation, query_entity)
         
@@ -301,10 +315,14 @@ class OptimizedPromptGraph(nn.Module):
         fusion_input = torch.cat([query_embedding, prompt_context], dim=-1)
         enhanced_embedding = self.context_fusion(fusion_input)
         
-        # 应用自适应权重
-        final_embedding = query_embedding + adaptive_weight * enhanced_embedding
-        
-        return final_embedding
+        if return_enhancement_only:
+            # 只返回增强增量，由外部权重控制混合
+            enhancement_delta = enhanced_embedding  # 返回融合后的增强嵌入（不含自适应权重）
+            return enhancement_delta
+        else:
+            # 应用自适应权重（原有逻辑）
+            final_embedding = query_embedding + adaptive_weight * enhanced_embedding
+            return final_embedding
 
 
 class AdaptiveEnhancementGate(nn.Module):
@@ -493,6 +511,43 @@ class EnhancedUltra(nn.Module):
         self.use_prompt_enhancer = getattr(flags, 'use_prompt_enhancer', False)
         self.use_adaptive_gate = getattr(flags, 'use_adaptive_gate', False)
         
+        # 增强器权重配置：控制两个增强器的贡献强度（用于固定权重模式）
+        self.similarity_enhancer_weight = getattr(flags, 'similarity_enhancer_weight', 1.0)
+        self.prompt_enhancer_weight = getattr(flags, 'prompt_enhancer_weight', 1.0)
+        
+        # 可学习的融合权重（方案3：可学习融合）
+        # 初始化权重：[原始表示r的权重, similarity_enhancer的权重, prompt_enhancer的权重]
+        # 使用logits，通过softmax归一化后使用
+        use_learnable_fusion = getattr(flags, 'use_learnable_fusion', True)  # 默认启用可学习融合
+        self.use_learnable_fusion = use_learnable_fusion
+        
+        if self.use_learnable_fusion:
+            # 初始化：基于flags.yaml中的权重，转换为logits
+            # 假设初始权重为 [1.0, similarity_weight, prompt_weight]
+            # 转换为logits：log(weight) - log(mean(weights))
+            initial_r_weight = 1.0
+            initial_sim_weight = self.similarity_enhancer_weight
+            initial_prompt_weight = self.prompt_enhancer_weight
+            
+            # 归一化初始权重
+            total = initial_r_weight + initial_sim_weight + initial_prompt_weight
+            initial_weights = torch.tensor([
+                initial_r_weight / total,
+                initial_sim_weight / total,
+                initial_prompt_weight / total
+            ])
+            
+            # 转换为logits（使用log-softmax的逆变换）
+            # 为了避免log(0)，添加小的epsilon
+            epsilon = 1e-8
+            initial_weights = torch.clamp(initial_weights, min=epsilon)
+            logits = torch.log(initial_weights)
+            
+            # 注册为可学习参数
+            self.fusion_weights_logits = nn.Parameter(logits)
+        else:
+            self.fusion_weights_logits = None
+        
         # 提示图增强模块（保留原有功能，可通过配置禁用）
         if self.use_prompt_enhancer:
             self.prompt_enhancer = OptimizedPromptGraph(
@@ -559,72 +614,102 @@ class EnhancedUltra(nn.Module):
             self.relation_representations_structural = self.relation_model(data, query=query_rels)
             self.final_relation_representations = self.relation_representations_structural
         
-        # 应用增强模块（根据消融实验配置）
-        # 首先应用相似度增强（如果启用）
+        # 应用增强模块（并行融合方式）
+        # 原始表示 r (SEMMA融合后的嵌入)
+        r = self.final_relation_representations  # [batch_size, num_relations, embedding_dim]
+        batch_size = len(query_rels)
+        
+        # 并行获取两个增强器的增量（都基于原始表示r）
+        # r1: similarity_enhancer的增量
         if self.use_similarity_enhancer and self.similarity_enhancer is not None:
-            # 根据配置决定是否使用门控机制
-            if self.use_adaptive_gate and self.enhancement_gate is not None:
-                # 使用自适应门控机制：只获取增强增量，由门控机制控制混合
-                # 这样可以避免双重混合（消除 enhancement_strength 和 gate_weight 的冗余）
-                enhancement_delta = self.similarity_enhancer(
-                    self.final_relation_representations, 
-                    query_rels,
-                    return_enhancement_only=True  # 只返回增强增量，不进行内部混合
-                )  # [batch_size, num_relations, embedding_dim]
+            r1_delta = self.similarity_enhancer(
+                r, 
+                query_rels,
+                return_enhancement_only=True  # 只返回增强增量
+            )  # [batch_size, num_relations, embedding_dim]
+        else:
+            r1_delta = torch.zeros_like(r)
+        
+        # r2: prompt_enhancer的增量（只增强查询关系）
+        if self.use_prompt_enhancer and self.prompt_enhancer is not None:
+            r2_delta = torch.zeros_like(r)
+            for i in range(batch_size):
+                query_rel = query_rels[i]
+                query_entity = query_entities[i]
+                base_repr = r[i, query_rel, :]  # 使用原始表示r，而不是enhanced_relation_representations
                 
-                # 计算门控权重
+                # 获取提示图增强增量
+                prompt_delta = self.prompt_enhancer(
+                    data, query_rel, query_entity, base_repr,
+                    return_enhancement_only=True  # 只返回增强增量
+                )  # [embedding_dim]
+                
+                r2_delta[i, query_rel, :] = prompt_delta
+        else:
+            r2_delta = torch.zeros_like(r)
+        
+        # 并行融合：使用可学习权重（方案3）
+        if self.use_learnable_fusion and self.fusion_weights_logits is not None:
+            # 使用softmax归一化可学习权重
+            fusion_weights = F.softmax(self.fusion_weights_logits, dim=0)  # [3]
+            # fusion_weights[0]: 原始表示r的权重
+            # fusion_weights[1]: similarity_enhancer的权重
+            # fusion_weights[2]: prompt_enhancer的权重
+            
+            # 计算增强后的表示：r1 = r + r1_delta, r2 = r + r2_delta
+            r1 = r + r1_delta  # similarity增强后的完整表示
+            r2 = r + r2_delta  # prompt增强后的完整表示
+            
+            # 如果使用自适应门控，对similarity增强应用门控权重
+            if self.use_adaptive_gate and self.enhancement_gate is not None and self.use_similarity_enhancer:
+                # 使用自适应门控机制：计算门控权重
                 gate_weights = self.enhancement_gate(
-                    self.final_relation_representations,
+                    r,
                     query_rels,
                     query_entities,
                     data
                 )  # [batch_size]
-                
-                # 使用门控权重混合原始表示和增强增量
-                # final = original + gate_weight * enhancement_delta
-                # 这样门控权重直接控制增强强度，消除了与 enhancement_strength 的冗余
-                batch_size = len(query_rels)
                 gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
                 
-                # 混合：final = original + gate * delta
+                # 可学习融合 + 自适应门控：weights[0]*r + gate*weights[1]*r1 + weights[2]*r2
                 self.enhanced_relation_representations = (
-                    self.final_relation_representations +
-                    gate_weights_expanded * enhancement_delta
+                    fusion_weights[0] * r + 
+                    gate_weights_expanded * fusion_weights[1] * r1 + 
+                    fusion_weights[2] * r2
                 )
             else:
-                # 不使用门控机制：使用内部 enhancement_strength 进行混合（原有逻辑）
-                self.enhanced_relation_representations = self.similarity_enhancer(
-                    self.final_relation_representations, 
-                    query_rels,
-                    return_enhancement_only=False  # 使用内部strength进行混合
+                # 可学习融合：weights[0]*r + weights[1]*r1 + weights[2]*r2
+                self.enhanced_relation_representations = (
+                    fusion_weights[0] * r + 
+                    fusion_weights[1] * r1 + 
+                    fusion_weights[2] * r2
                 )
         else:
-            # 如果没有启用相似度增强，直接使用原始表示
-            self.enhanced_relation_representations = self.final_relation_representations
-        
-        # 然后应用提示图增强（如果启用且相似度增强未启用，或两者都启用）
-        # 注意：如果同时启用，提示图增强会在相似度增强之后应用
-        if self.use_prompt_enhancer and self.prompt_enhancer is not None:
-            # 对每个查询应用提示图增强
-            batch_size = len(query_rels)
-            enhanced_reprs = []
-            
-            for i in range(batch_size):
-                query_rel = query_rels[i]
-                query_entity = query_entities[i]
-                base_repr = self.enhanced_relation_representations[i, query_rel, :]  # [embedding_dim]
+            # 固定权重融合（回退到方案1）：r + u*r1 + θ*r2
+            # 其中 u = similarity_enhancer_weight, θ = prompt_enhancer_weight
+            if self.use_adaptive_gate and self.enhancement_gate is not None and self.use_similarity_enhancer:
+                # 使用自适应门控机制：计算门控权重
+                gate_weights = self.enhancement_gate(
+                    r,
+                    query_rels,
+                    query_entities,
+                    data
+                )  # [batch_size]
+                gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
                 
-                # 应用提示图增强
-                enhanced_repr = self.prompt_enhancer(
-                    data, query_rel, query_entity, base_repr
-                )  # [embedding_dim]
-                
-                # 更新该查询关系的表示
-                enhanced_batch = self.enhanced_relation_representations[i].clone()
-                enhanced_batch[query_rel] = enhanced_repr
-                enhanced_reprs.append(enhanced_batch)
-            
-            self.enhanced_relation_representations = torch.stack(enhanced_reprs, dim=0)
+                # 并行融合：r + gate_weight * u * r1 + θ * r2
+                self.enhanced_relation_representations = (
+                    r + 
+                    gate_weights_expanded * self.similarity_enhancer_weight * r1_delta + 
+                    self.prompt_enhancer_weight * r2_delta
+                )
+            else:
+                # 不使用门控机制：直接并行融合 r + u*r1 + θ*r2
+                self.enhanced_relation_representations = (
+                    r + 
+                    self.similarity_enhancer_weight * r1_delta + 
+                    self.prompt_enhancer_weight * r2_delta
+                )
         
         # 使用最终的关系表示进行实体推理
         score = self.entity_model(data, self.enhanced_relation_representations, batch)

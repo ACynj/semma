@@ -24,4 +24,9 @@ enhancement_strength_init: 0.09
 use_adaptive_gate: False # [True, False], if True, use adaptive gate to learn when to apply enhancement
 # Ablation Study Settings (for EnhancedUltra)
 use_similarity_enhancer: True # [True, False], if True, use similarity-based relation enhancer
-use_prompt_enhancer: False # [True, False], if True, use prompt graph enhancer
+use_prompt_enhancer: True # [True, False], if True, use prompt graph enhancer
+# Enhancement Module Weights (控制两个增强器的贡献权重)
+similarity_enhancer_weight: 0.2 # [0.0-1.0], weight for similarity enhancer output (lower if effect is poor)
+prompt_enhancer_weight: 0.8 # [0.0-1.0], weight for prompt enhancer output (higher if effect is good)
+# Parallel Fusion Settings (并行融合设置)
+use_learnable_fusion: True # [True, False], if True, use learnable fusion weights (方案3); if False, use fixed weights (方案1)
