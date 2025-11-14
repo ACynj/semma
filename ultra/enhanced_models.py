@@ -277,7 +277,23 @@ class OptimizedPromptGraph(nn.Module):
         prompt_context = self.encode_prompt_context(prompt_graph, query_relation)
         
         # 计算自适应权重
-        query_embedding = base_embeddings[query_relation]
+        # 兼容两种输入：
+        # - base_embeddings 为 [embedding_dim] 的单个向量（推荐用法）
+        # - base_embeddings 为 [num_relations, embedding_dim] 的矩阵（回退兼容）
+        if isinstance(base_embeddings, torch.Tensor) and base_embeddings.dim() >= 2:
+            # 从矩阵中取出对应关系的向量
+            query_embedding = base_embeddings[query_relation]
+        else:
+            # 已经是对应关系的向量
+            query_embedding = base_embeddings
+        
+        # 防御性检查：确保都是 1D 向量 [embedding_dim]
+        if query_embedding.dim() == 0:
+            # 避免 0 维张量导致 cat 报错
+            query_embedding = query_embedding.unsqueeze(0)
+        if prompt_context.dim() == 0:
+            prompt_context = prompt_context.unsqueeze(0)
+        
         weight_input = torch.cat([query_embedding, prompt_context], dim=-1)
         adaptive_weight = self.adaptive_weights(weight_input)
         
