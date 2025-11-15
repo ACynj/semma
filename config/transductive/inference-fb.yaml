@@ -1,4 +1,4 @@
-output_dir: ./gate_output/ 
+output_dir: ./fusion_output/ 
 
 dataset:
   class: {{ dataset }}

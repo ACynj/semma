@@ -67,16 +67,17 @@ def test_learnable_fusion():
         
         # 检查可学习融合权重
         if model.use_learnable_fusion and model.fusion_weights_logits is not None:
-            print(f"\n✓ 可学习融合权重已创建")
+            print(f"\n✓ 可学习融合权重已创建（增量融合方式）")
             print(f"  - fusion_weights_logits shape: {model.fusion_weights_logits.shape}")
             print(f"  - fusion_weights_logits values: {model.fusion_weights_logits.data}")
             
-            # 计算softmax后的权重
-            fusion_weights = torch.nn.functional.softmax(model.fusion_weights_logits, dim=0)
-            print(f"  - 归一化后的权重 (softmax): {fusion_weights.data}")
-            print(f"    * 原始表示r的权重: {fusion_weights[0].item():.4f}")
-            print(f"    * similarity_enhancer的权重: {fusion_weights[1].item():.4f}")
-            print(f"    * prompt_enhancer的权重: {fusion_weights[2].item():.4f}")
+            # 计算softmax后的权重（只有2个权重：similarity和prompt）
+            enhancement_weights = torch.nn.functional.softmax(model.fusion_weights_logits, dim=0)
+            print(f"  - 归一化后的权重 (softmax): {enhancement_weights.data}")
+            print(f"    * 原始表示r: 直接保留（权重=1.0，不学习）")
+            print(f"    * similarity_enhancer的权重: {enhancement_weights[0].item():.4f}")
+            print(f"    * prompt_enhancer的权重: {enhancement_weights[1].item():.4f}")
+            print(f"    * 融合公式: final = r + {enhancement_weights[0].item():.4f}*r1_delta + {enhancement_weights[1].item():.4f}*r2_delta")
         else:
             print("\n⚠ 可学习融合未启用，使用固定权重模式")
         
