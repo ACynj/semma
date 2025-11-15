@@ -973,10 +973,10 @@ class OptimizedPromptGraph(nn.Module):
             )
         else:
             # 回退：如果没有关系嵌入，使用改进的初始化策略
-        if self.training:
-            # 训练时：使用随机初始化以增加多样性
-            node_embeddings = torch.randn(prompt_graph.num_nodes, self.embedding_dim, device=device)
-        else:
+            if self.training:
+                # 训练时：使用随机初始化以增加多样性
+                node_embeddings = torch.randn(prompt_graph.num_nodes, self.embedding_dim, device=device)
+            else:
                 # 推理时：使用小的固定值而不是零向量（比零向量稍好）
                 # 使用查询关系索引的哈希值作为种子，保证可重复性
                 import hashlib
