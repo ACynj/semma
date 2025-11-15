@@ -1448,17 +1448,17 @@ class EnhancedUltra(nn.Module):
         
         if flags.run == "semma" or flags.run == "EnhancedUltra":
             with timer("Relation Model (structural)", logger):
-            self.relation_representations_structural = self.relation_model(data, query=query_rels)
+                self.relation_representations_structural = self.relation_model(data, query=query_rels)
             with timer("Semantic Model", logger):
-            self.relation_representations_semantic = self.semantic_model(data, query=query_rels)
+                self.relation_representations_semantic = self.semantic_model(data, query=query_rels)
             with timer("Combiner", logger):
-            self.final_relation_representations = self.combiner(
-                self.relation_representations_structural, 
-                self.relation_representations_semantic
-            )
+                self.final_relation_representations = self.combiner(
+                    self.relation_representations_structural, 
+                    self.relation_representations_semantic
+                )
         else:
             with timer("Relation Model", logger):
-            self.relation_representations_structural = self.relation_model(data, query=query_rels)
+                self.relation_representations_structural = self.relation_model(data, query=query_rels)
             self.final_relation_representations = self.relation_representations_structural
         
         # 应用增强模块（并行融合方式）
@@ -1473,11 +1473,11 @@ class EnhancedUltra(nn.Module):
         if self.use_similarity_enhancer and self.similarity_enhancer is not None:
             logger.debug(f"[EnhancedUltra] 应用similarity_enhancer")
             with timer("Similarity Enhancer", logger):
-            r1_delta = self.similarity_enhancer(
-                r, 
-                query_rels,
-                return_enhancement_only=True  # 只返回增强增量
-            )  # [batch_size, num_relations, embedding_dim]
+                r1_delta = self.similarity_enhancer(
+                    r, 
+                    query_rels,
+                    return_enhancement_only=True  # 只返回增强增量
+                )  # [batch_size, num_relations, embedding_dim]
             logger.debug(f"[EnhancedUltra] similarity_enhancer完成，r1_delta形状={r1_delta.shape}")
         else:
             r1_delta = torch.zeros_like(r)
@@ -1487,22 +1487,22 @@ class EnhancedUltra(nn.Module):
             logger.debug(f"[EnhancedUltra] 应用prompt_enhancer，batch_size={batch_size}")
             r2_delta = torch.zeros_like(r)
             with timer(f"Prompt Enhancer (batch_size={batch_size})", logger):
-            for i in range(batch_size):
-                query_rel = query_rels[i]
-                query_entity = query_entities[i]
-                base_repr = r[i, query_rel, :]  # 使用原始表示r，而不是enhanced_relation_representations
-                
+                for i in range(batch_size):
+                    query_rel = query_rels[i]
+                    query_entity = query_entities[i]
+                    base_repr = r[i, query_rel, :]  # 使用原始表示r，而不是enhanced_relation_representations
+                    
                     # 获取提示图增强增量（传入关系嵌入、entity_model和relation_representations以使用方案2）
                     try:
                         with timer(f"Prompt Enhancer batch {i}", logger, min_time_ms=50):
-                prompt_delta = self.prompt_enhancer(
-                    data, query_rel, query_entity, base_repr,
+                            prompt_delta = self.prompt_enhancer(
+                                data, query_rel, query_entity, base_repr,
                                 return_enhancement_only=True,  # 只返回增强增量
                                 relation_embeddings=r[i],  # 传入当前batch的关系嵌入 [num_relations, embedding_dim]
                                 entity_model=None,  # 暂时禁用EntityNBFNet方案，避免维度不匹配问题
                                 relation_representations=None  # 暂时禁用EntityNBFNet方案
-                )  # [embedding_dim]
-                r2_delta[i, query_rel, :] = prompt_delta
+                            )  # [embedding_dim]
+                        r2_delta[i, query_rel, :] = prompt_delta
                     except Exception as e:
                         logger.warning(f"[EnhancedUltra] prompt_enhancer在batch {i}失败: {e}")
                         # 失败时使用零增量，避免CUDA错误传播
@@ -1584,7 +1584,7 @@ class EnhancedUltra(nn.Module):
             logger.debug(f"[EnhancedUltra] 实体推理前GPU内存: {memory_allocated:.2f}GB")
         
         try:
-        score = self.entity_model(data, self.enhanced_relation_representations, batch)
+            score = self.entity_model(data, self.enhanced_relation_representations, batch)
             logger.debug(f"[EnhancedUltra] 实体推理完成，score形状={score.shape}")
         except RuntimeError as e:
             if "out of memory" in str(e):
