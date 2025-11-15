@@ -59,14 +59,14 @@ class EntityRelationJointEnhancer(nn.Module):
         self._cached_edge_index = None
         self._cached_edge_index_hash = None
     
-    def _get_k_hop_neighbors(self, data, seed_entities, max_hops=2):
+    def _get_k_hop_neighbors(self, data, seed_entities, max_hops=1):
         """
         获取实体的k跳邻居（包括实体本身）
         
         Args:
             data: 图数据
             seed_entities: 种子实体集合（set或list）
-            max_hops: 最大跳数（默认2跳）
+            max_hops: 最大跳数（默认1跳）
         
         Returns:
             relevant_entities: 相关实体集合（包括种子实体和k跳邻居）
@@ -223,14 +223,14 @@ class EntityRelationJointEnhancer(nn.Module):
             # 回退：如果实体没有边，使用所有关系的平均嵌入
             return relation_embeddings.mean(dim=0)
     
-    def _get_k_hop_neighbors(self, data, seed_entities, max_hops=2):
+    def _get_k_hop_neighbors(self, data, seed_entities, max_hops=1):
         """
         获取实体的k跳邻居（包括实体本身）
         
         Args:
             data: 图数据
             seed_entities: 种子实体集合（set或list）
-            max_hops: 最大跳数（默认2跳）
+            max_hops: 最大跳数（默认1跳）
         
         Returns:
             relevant_entities: 相关实体集合（包括种子实体和k跳邻居）
@@ -272,7 +272,7 @@ class EntityRelationJointEnhancer(nn.Module):
     def compute_enhanced_boundary(self, data, h_index, r_index, relation_representations):
         """
         计算增强的boundary条件（为所有实体提供初始特征）
-        优化：只计算查询相关实体及其2跳邻居，减少不必要的计算
+        优化：只计算查询相关实体及其1跳邻居，减少不必要的计算
         
         Args:
             data: 图数据
@@ -303,7 +303,7 @@ class EntityRelationJointEnhancer(nn.Module):
         
         logger = logging.getLogger(__name__)
         
-        # 优化：只计算查询相关实体及其2跳邻居
+        # 优化：只计算查询相关实体及其1跳邻居
         # 1. 收集所有查询实体（源实体）
         with timer("收集查询实体", logger):
             query_entities = set()
@@ -315,16 +315,16 @@ class EntityRelationJointEnhancer(nn.Module):
             else:
                 query_entities.add(h_index)
         
-        # 2. 获取查询实体的2跳邻居
-        with timer(f"计算2跳邻居 (种子数={len(query_entities)})", logger):
-            relevant_entities = self._get_k_hop_neighbors(data, query_entities, max_hops=2)
+        # 2. 获取查询实体的1跳邻居
+        with timer(f"计算1跳邻居 (种子数={len(query_entities)})", logger):
+            relevant_entities = self._get_k_hop_neighbors(data, query_entities, max_hops=1)
         
         # 3. 移除实体数量限制，计算所有相关实体以最大化模型效果
         # 由于实体特征计算很快（~500ms for 500 entities），可以计算所有相关实体
-        # 不再限制实体数量，让所有2跳邻居都参与计算
+        # 不再限制实体数量，让所有1跳邻居都参与计算
         
         logger.debug(f"[Entity Enhancer] 查询实体数={len(query_entities)}, "
-                    f"2跳邻居实体数={len(relevant_entities)}, batch_size={batch_size}")
+                    f"1跳邻居实体数={len(relevant_entities)}, batch_size={batch_size}")
         
         # 4. 只为相关实体计算特征
         with timer(f"计算实体特征 (实体数={len(relevant_entities)})", logger):
@@ -637,7 +637,7 @@ class OptimizedPromptGraph(nn.Module):
     减少计算开销，提高运行效率
     """
     
-    def __init__(self, embedding_dim=64, max_hops=2, num_prompt_samples=3):
+    def __init__(self, embedding_dim=64, max_hops=1, num_prompt_samples=3):
         super(OptimizedPromptGraph, self).__init__()
         
         self.embedding_dim = embedding_dim
@@ -671,14 +671,14 @@ class OptimizedPromptGraph(nn.Module):
         self._cached_edge_index = None
         self._cached_edge_index_hash = None
         
-    def _get_k_hop_neighbors(self, data, seed_entities, max_hops=2):
+    def _get_k_hop_neighbors(self, data, seed_entities, max_hops=1):
         """
         获取实体的k跳邻居（包括实体本身）
         
         Args:
             data: 图数据
             seed_entities: 种子实体集合（set或list）
-            max_hops: 最大跳数（默认2跳）
+            max_hops: 最大跳数（默认1跳）
         
         Returns:
             relevant_entities: 相关实体集合（包括种子实体和k跳邻居）
@@ -755,7 +755,7 @@ class OptimizedPromptGraph(nn.Module):
         return relevant_entities
         
     def generate_prompt_graph(self, data, query_relation, query_entity, num_samples=None):
-        """快速生成提示图（优化：使用2跳邻居）
+        """快速生成提示图（优化：使用1跳邻居）
         
         Returns:
             prompt_graph: 提示图对象，或None
@@ -764,7 +764,7 @@ class OptimizedPromptGraph(nn.Module):
         if num_samples is None:
             num_samples = self.num_prompt_samples
             
-        # 优化的提示图生成 - 使用2跳邻域
+        # 优化的提示图生成 - 使用1跳邻域
         device = query_entity.device
         
         # 1. 找到包含查询关系的边（用于采样示例）
@@ -772,12 +772,12 @@ class OptimizedPromptGraph(nn.Module):
             edge_mask = (data.edge_type == query_relation)
             query_edges = data.edge_index[:, edge_mask]
         
-        # 2. 从查询实体开始，获取2跳邻居
+        # 2. 从查询实体开始，获取1跳邻居
         query_entity_id = query_entity.item() if isinstance(query_entity, torch.Tensor) else query_entity
         seed_entities = {query_entity_id}
         
-        # 3. 获取查询实体及其2跳邻居
-        prompt_entities = self._get_k_hop_neighbors(data, seed_entities, max_hops=2)
+        # 3. 获取查询实体及其1跳邻居
+        prompt_entities = self._get_k_hop_neighbors(data, seed_entities, max_hops=1)
         
         # 4. 如果有查询关系的边，也添加这些边的实体（但不作为种子再找邻居）
         if query_edges.shape[1] > 0:
@@ -1376,7 +1376,7 @@ class EnhancedUltra(nn.Module):
         if self.use_prompt_enhancer:
             self.prompt_enhancer = OptimizedPromptGraph(
                 embedding_dim=64,
-                max_hops=2,  # 使用2跳邻居，与实体增强保持一致
+                max_hops=1,  # 使用1跳邻居，提升计算速度
                 num_prompt_samples=3  # 减少到3，提升计算速度（从5降低）
             )
         else:
