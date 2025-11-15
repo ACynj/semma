@@ -87,7 +87,21 @@ class GeneralizedRelationalConv(MessagePassing):
             else:
                 # NEW and only change: 
                 # projecting relation features to unique features for this layer, then resizing for the current batch
-                relation = self.relation_projection(self.relation)
+                relation = self.relation_projection(self.relation)  # 可能是[num_relations, input_dim]或其他维度
+                # 确保relation是2D: [num_relations, input_dim]
+                if relation.dim() > 2:
+                    # 如果是多维，取第一个batch或reshape
+                    relation = relation.view(-1, relation.shape[-1])  # 展平为[num_relations, input_dim]
+                elif relation.dim() == 1:
+                    # 如果是1D，需要reshape
+                    relation = relation.view(1, -1)  # [1, input_dim]，但这种情况不应该发生
+                # 需要扩展为[batch_size, num_relations, input_dim]
+                if relation.dim() == 2:
+                    relation = relation.unsqueeze(0).expand(batch_size, -1, -1)
+                # 如果已经是3D，检查batch_size是否匹配
+                elif relation.dim() == 3:
+                    if relation.shape[0] != batch_size:
+                        relation = relation[0].unsqueeze(0).expand(batch_size, -1, -1)
         if edge_weight is None:
             edge_weight = torch.ones(len(edge_type), device=input.device)
 
