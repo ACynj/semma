@@ -18,10 +18,6 @@ models_path: /T20030104/ynj/semma/models # Models directory path
 kg_datasets_path: /T20030104/ynj/semma/kg-datasets # Knowledge graph datasets directory path
 openrouter_path: /T20030104/ynj/semma/openrouter # OpenRouter data directory path
 # EnhancedUltra Similarity Enhancement Parameters
-# 注意：similarity_threshold_init 和 enhancement_strength_init 是可学习参数的初始值
-# 这些参数在训练过程中会学习，初始值只是起点（影响训练起点）
-similarity_threshold_init: 0.72  # 相似度阈值初始值（可学习，会自适应调整）
-enhancement_strength_init: 0.1  # 增强强度初始值（可学习，会自适应调整）
 max_similar_relations: 3  # 只使用top-3个最相似的关系进行增强（快速模式）
 num_prompt_samples: 15  # 提示图只使用15个最重要的示例
 max_hops: 2  # 最大跳数：使用2跳邻居
@@ -29,11 +25,10 @@ max_hops: 2  # 最大跳数：使用2跳邻居
 use_similarity_enhancer: True # [True, False], if True, use similarity-based relation enhancer
 use_prompt_enhancer: True # [True, False], if True, use prompt graph enhancer
 # Fusion Settings (融合设置)
-# use_learnable_fusion: 学习两个增强器的融合权重（推荐使用，更灵活）
-# 如果为True，权重会在训练过程中学习；如果为False，使用固定的similarity_enhancer_weight和prompt_enhancer_weight
-# 注意：use_adaptive_gate已移除，功能由use_learnable_fusion替代（更灵活，可以学习两个增强器的权重）
+# use_learnable_fusion: 学习融合权重（推荐使用，更灵活）
+# 如果为True，权重会在训练过程中自动学习；如果为False，使用固定权重（需要手动设置）
 use_learnable_fusion: True # [True, False], if True, use learnable fusion weights (推荐); if False, use fixed weights
 # Enhancement Module Weights (仅当use_learnable_fusion=False时使用，作为固定权重)
-# 当use_learnable_fusion=True时，这些权重仅作为可学习权重的初始值
-similarity_enhancer_weight: 0.5 # [0.0-1.0], initial weight for similarity enhancer (used as init if learnable)
-prompt_enhancer_weight: 0.5 # [0.0-1.0], initial weight for prompt enhancer (used as init if learnable)
+# 注意：当use_learnable_fusion=True时，这些参数会被忽略，权重会自动学习
+similarity_enhancer_weight: 0.5 # [0.0-1.0], fixed weight for similarity enhancer (only used when use_learnable_fusion=False)
+prompt_enhancer_weight: 0.5 # [0.0-1.0], fixed weight for prompt enhancer (only used when use_learnable_fusion=False)

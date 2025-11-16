@@ -699,6 +699,14 @@ class SimilarityBasedRelationEnhancer(nn.Module):
         strength = self.get_enhancement_strength()
         temp = torch.clamp(self.temperature, min=0.1, max=10.0)  # 限制温度范围
         
+        # 定期打印参数值（每100个batch打印一次）
+        logger = logging.getLogger(__name__)
+        if not hasattr(self, '_sim_log_counter'):
+            self._sim_log_counter = 0
+        self._sim_log_counter += 1
+        if self._sim_log_counter % 100 == 0 or self._sim_log_counter == 1:
+            logger.debug(f"[Similarity Enhancer] 参数: threshold={threshold.item():.3f}, strength={strength.item():.4f}, temp={temp.item():.2f}")
+        
         # 初始化增强后的表示
         if return_enhancement_only:
             # 如果只返回增强增量，初始化为零（只更新查询关系的位置）
@@ -707,66 +715,70 @@ class SimilarityBasedRelationEnhancer(nn.Module):
             # 如果返回混合后的表示，初始化为原始表示
             enhanced_reprs = final_relation_representations.clone()
         
+        # 改进：批量归一化所有关系表示
+        all_norms = F.normalize(final_relation_representations, p=2, dim=2)  # [batch, num_rels, dim]
+        
+        # 批量提取查询关系表示
+        batch_indices = torch.arange(batch_size, device=device)  # [batch]
+        query_indices_expanded = query_rels.unsqueeze(1).unsqueeze(2).expand(-1, -1, embedding_dim)  # [batch, 1, dim]
+        query_reprs = torch.gather(all_norms, 1, query_indices_expanded).squeeze(1)  # [batch, dim]
+        
+        # 批量计算相似度矩阵
+        # query_reprs: [batch, dim], all_norms: [batch, num_rels, dim]
+        similarities = torch.bmm(query_reprs.unsqueeze(1), all_norms.transpose(1, 2)).squeeze(1)  # [batch, num_rels]
+        
+        # 批量排除查询关系本身（设置为-1，确保不被选择）
+        similarities[batch_indices, query_rels] = -1.0
+        
+        # 批量计算阈值权重
+        similarity_weights = torch.sigmoid((similarities - threshold) * 10.0)  # [batch, num_rels]
+        above_threshold = similarity_weights > 0.5  # [batch, num_rels]
+        
+        # 统计信息
+        total_valid_relations = 0
+        total_used_relations = 0
+        
+        # 优化：批量处理top-k选择（使用批量top-k和gather）
+        # 批量选择top-k个最相似的关系
+        # similarities: [batch_size, num_relations]
+        # 排除查询关系本身（已经设置为-1）
+        # 批量top-k选择
+        top_k_values, top_k_indices = torch.topk(similarities, k=min(self.max_similar_relations, num_relations), dim=1)  # [batch_size, k]
+        
+        # 批量过滤：只保留超过阈值的（top_k_values > threshold）
+        # 注意：由于我们已经设置了查询关系本身为-1，top-k可能包含-1
+        valid_mask = top_k_values > threshold  # [batch_size, k]
+        
+        # 对每个batch处理（由于每个batch的有效关系数不同，仍需要部分循环，但已大大简化）
         for i in range(batch_size):
             query_rel_idx = query_rels[i].item()
             if query_rel_idx >= num_relations or query_rel_idx < 0:
                 continue
             
-            # 获取查询关系的表示
-            query_rel_repr = final_relation_representations[i, query_rel_idx, :]  # [embedding_dim]
+            # 获取当前batch的有效top-k索引
+            batch_valid_mask = valid_mask[i]  # [k]
+            batch_top_k_indices = top_k_indices[i]  # [k]
+            batch_top_k_values = top_k_values[i]  # [k]
             
-            # 获取所有关系的表示
-            all_rel_reprs = final_relation_representations[i, :, :]  # [num_relations, embedding_dim]
+            # 过滤出有效的索引（超过阈值且不是查询关系本身）
+            valid_top_k_mask = batch_valid_mask & (batch_top_k_indices != query_rel_idx)
+            valid_indices = batch_top_k_indices[valid_top_k_mask]  # [num_valid, <=k]
+            valid_similarities_raw = batch_top_k_values[valid_top_k_mask]  # [num_valid]
             
-            # 计算与所有关系的余弦相似度
-            # 归一化
-            query_norm = F.normalize(query_rel_repr, p=2, dim=0)  # [embedding_dim]
-            all_norms = F.normalize(all_rel_reprs, p=2, dim=1)  # [num_relations, embedding_dim]
-            
-            # 计算余弦相似度 (使用矩阵乘法更高效)
-            similarities = torch.matmul(query_norm.unsqueeze(0), all_norms.t()).squeeze(0)  # [num_relations]
-            
-            # 排除查询关系本身（设置为-1，确保不被选择）
-            similarities[query_rel_idx] = -1.0
-            
-            # 找到相似度大于阈值的关系
-            # 使用soft thresholding让阈值也参与梯度计算（使用sigmoid平滑）
-            # 这比硬阈值更好，因为可以计算梯度
-            threshold_scaled = threshold.unsqueeze(0).expand_as(similarities)  # [num_relations]
-            # 使用sigmoid实现平滑的阈值过滤，保留梯度
-            # similarity_weight = sigmoid((similarity - threshold) * temperature_scale)
-            # 这样相似度高的会有较大权重，相似度低的会有较小权重
-            similarity_weights = torch.sigmoid((similarities - threshold) * 10.0)  # [num_relations]
-            
-            # 找到权重足够大的关系（>0.5相当于相似度>阈值）
-            above_threshold = similarity_weights > 0.5
-            valid_indices = torch.where(above_threshold)[0]
+            total_valid_relations += len(valid_indices)
+            total_used_relations += len(valid_indices)
             
             if len(valid_indices) == 0:
                 # 如果没有超过阈值的，保持原样（零增量或原始表示）
                 if not return_enhancement_only:
-                    enhanced_reprs[i, query_rel_idx, :] = query_rel_repr
+                    enhanced_reprs[i, query_rel_idx, :] = final_relation_representations[i, query_rel_idx, :]
                 continue
             
-            # 优化：只使用top-k个最相似的关系（大幅减少计算量）
-            valid_similarities_raw = similarities[valid_indices]  # [num_valid]
-            
-            # 选择top-k个最相似的关系
-            if len(valid_indices) > self.max_similar_relations:
-                # 获取top-k个最相似的关系的索引
-                top_k_values, top_k_local_indices = torch.topk(valid_similarities_raw, 
-                                                               k=min(self.max_similar_relations, len(valid_indices)),
-                                                               dim=0)
-                # 将局部索引转换为全局索引
-                top_k_indices = valid_indices[top_k_local_indices]
-                valid_indices = top_k_indices
-                valid_similarities_raw = top_k_values
-            
             # 使用平滑的权重而不是硬阈值
-            valid_weights_smooth = similarity_weights[valid_indices]  # [num_valid]
+            valid_weights_smooth = similarity_weights[i, valid_indices]  # [num_valid]
             
-            # 获取有效关系的表示
-            valid_reprs = all_rel_reprs[valid_indices, :]  # [num_valid, embedding_dim]
+            # 获取有效关系的表示（使用批量归一化后的表示）
+            valid_reprs = all_norms[i, valid_indices, :]  # [num_valid, embedding_dim]
             
             # 使用有效关系的相似度和平滑权重
             valid_similarities = valid_similarities_raw  # [num_valid]
@@ -790,6 +802,7 @@ class SimilarityBasedRelationEnhancer(nn.Module):
             weighted_similar_repr = torch.sum(valid_reprs * adjusted_weights.unsqueeze(1), dim=0)  # [embedding_dim]
             
             # 根据 return_enhancement_only 决定返回什么
+            query_rel_repr = final_relation_representations[i, query_rel_idx, :]  # [embedding_dim]
             if return_enhancement_only:
                 # 只返回增强增量（weighted_similar_repr - query_rel_repr），由外部门控机制控制混合
                 enhancement_delta = weighted_similar_repr - query_rel_repr
@@ -800,6 +813,12 @@ class SimilarityBasedRelationEnhancer(nn.Module):
                 # 这等价于：enhanced = (1 - strength) * original + strength * weighted_similar
                 enhanced_query_repr = (1.0 - strength) * query_rel_repr + strength * weighted_similar_repr
                 enhanced_reprs[i, query_rel_idx, :] = enhanced_query_repr
+        
+        # 打印统计信息（每100个batch打印一次）
+        if self._sim_log_counter % 100 == 0 or self._sim_log_counter == 1:
+            avg_valid = total_valid_relations / batch_size if batch_size > 0 else 0
+            avg_used = total_used_relations / batch_size if batch_size > 0 else 0
+            logger.debug(f"[Similarity Enhancer] 统计: 平均有效相似关系={avg_valid:.1f}, 平均使用={avg_used:.1f}")
         
         return enhanced_reprs
 
@@ -831,11 +850,58 @@ class OptimizedPromptGraph(nn.Module):
         self._cache_misses = 0
         self._max_cache_size = 10  # 最多缓存10个结果（内存优化：减少缓存大小以避免OOM）
         
-        # 简化的提示图编码器
+        # 简化的提示图编码器（用于无边的图）
         self.prompt_encoder = nn.Sequential(
             nn.Linear(embedding_dim, embedding_dim),
             nn.ReLU(),
             nn.Linear(embedding_dim, embedding_dim)
+        )
+        
+        # 简单的GCN层（用于编码图结构）
+        # 使用MessagePassing实现简单的图卷积
+        from torch_geometric.nn import MessagePassing
+        
+        class SimpleGCNLayer(MessagePassing):
+            """简单的GCN层（带自环和归一化）"""
+            def __init__(self, embedding_dim):
+                super().__init__(aggr='add')
+                self.lin = nn.Linear(embedding_dim, embedding_dim)
+                self.norm = nn.LayerNorm(embedding_dim)
+            
+            def forward(self, x, edge_index):
+                # x: [num_nodes, embedding_dim]
+                # edge_index: [2, num_edges]
+                # 添加自环（每个节点连接到自身）
+                from torch_geometric.utils import add_self_loops
+                edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+                
+                # 计算度归一化
+                from torch_geometric.utils import degree
+                row, col = edge_index
+                deg = degree(col, x.size(0), dtype=x.dtype)
+                deg_inv_sqrt = deg.pow(-0.5)
+                deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+                norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
+                
+                # 传播消息
+                out = self.propagate(edge_index, x=x, norm=norm)
+                out = self.lin(out)
+                out = self.norm(out)
+                return out
+            
+            def message(self, x_j, norm):
+                return norm.view(-1, 1) * x_j
+        
+        # 使用1层GCN编码图结构
+        self.gnn_layers = nn.ModuleList([
+            SimpleGCNLayer(embedding_dim) for _ in range(1)
+        ])
+        
+        # 注意力池化（替代简单平均池化）
+        self.attention_pooling = nn.Sequential(
+            nn.Linear(embedding_dim, embedding_dim // 2),
+            nn.Tanh(),
+            nn.Linear(embedding_dim // 2, 1)
         )
         
         # 简化的自适应权重网络
@@ -944,525 +1010,273 @@ class OptimizedPromptGraph(nn.Module):
         return relevant_entities
         
     def generate_prompt_graph(self, data, query_relation, query_entity, num_samples=None):
-        """快速生成提示图（优化：使用1跳邻居）
+        """简化版：直接找到与查询关系相关的边，选择中心度最高的几个
         
         Returns:
-            prompt_graph: 提示图对象，或None
-            prompt_entities: 提示图中的实体列表（用于节点初始化）
+            selected_edges: 选中的边 [2, num_selected]，或None
+            selected_edge_types: 选中的边类型 [num_selected]，或None
         """
+        logger = logging.getLogger(__name__)
         if num_samples is None:
             num_samples = self.num_prompt_samples
             
-        # 优化的提示图生成 - 使用1跳邻域
         device = query_entity.device
-        
-        # 1. 找到包含查询关系的边（用于采样示例）
-        with timer("查找查询关系的边", logger=None, min_time_ms=50):
-            edge_mask = (data.edge_type == query_relation)
-            query_edges = data.edge_index[:, edge_mask]
-        
-        # 2. 从查询实体开始，获取1跳邻居
         query_entity_id = query_entity.item() if isinstance(query_entity, torch.Tensor) else query_entity
-        seed_entities = {query_entity_id}
+        query_rel_idx = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
+        logger.debug(f"[Prompt Enhancer] 简化模式：查找查询关系相关的边: query_entity={query_entity_id}, query_rel={query_rel_idx}")
         
-        # 3. 获取查询实体及其1跳邻居
-        prompt_entities = self._get_k_hop_neighbors(data, seed_entities, max_hops=self.max_hops)
+        # 1. 找到包含查询关系的边
+        edge_mask = (data.edge_type == query_relation)
+        query_edges = data.edge_index[:, edge_mask]
+        query_edge_types = data.edge_type[edge_mask]
         
-        # 4. 如果有查询关系的边，只选择最重要的几个示例（优化：按重要性排序）
-        if query_edges.shape[1] > 0:
-            # 优化：只使用最重要的几个示例（按度排序，选择连接度高的实体）
-            if query_edges.shape[1] > num_samples:
-                # 计算每条边的重要性（使用源实体和目标实体的度之和）
-                head_nodes = query_edges[0]
-                tail_nodes = query_edges[1]
-                
-                # 快速计算实体度（使用bincount）
-                all_nodes = torch.cat([data.edge_index[0], data.edge_index[1]])
-                node_degrees = torch.bincount(all_nodes, minlength=data.num_nodes)
-                
-                # 计算每条边的重要性（源实体度 + 目标实体度）
-                edge_importance = node_degrees[head_nodes] + node_degrees[tail_nodes]
-                
-                # 选择重要性最高的num_samples条边
-                _, top_indices = torch.topk(edge_importance, k=min(num_samples, query_edges.shape[1]), dim=0)
-                sampled_edges = query_edges[:, top_indices]
-            else:
-                sampled_edges = query_edges
+        if query_edges.shape[1] == 0:
+            logger.debug(f"[Prompt Enhancer] 未找到查询关系的边")
+            return None, None
+        
+        # 2. 如果边数超过num_samples，选择中心度最高的几个
+        if query_edges.shape[1] > num_samples:
+            # 计算每条边的重要性（使用源实体和目标实体的度之和作为中心度）
+            head_nodes = query_edges[0]
+            tail_nodes = query_edges[1]
             
-            # 添加采样边的实体（直接添加，不找邻居）
-            with timer("添加采样边的实体", logger=None, min_time_ms=50):
-                # 使用向量化操作
-                head_nodes = sampled_edges[0]
-                tail_nodes = sampled_edges[1]
-                prompt_entities.update(head_nodes.cpu().tolist())
-                prompt_entities.update(tail_nodes.cpu().tolist())
+            # 快速计算实体度（使用bincount）
+            all_nodes = torch.cat([data.edge_index[0], data.edge_index[1]])
+            node_degrees = torch.bincount(all_nodes, minlength=data.num_nodes)
+            
+            # 计算每条边的重要性（源实体度 + 目标实体度）
+            edge_importance = node_degrees[head_nodes] + node_degrees[tail_nodes]
+            
+            # 选择重要性最高的num_samples条边
+            _, top_indices = torch.topk(edge_importance, k=min(num_samples, query_edges.shape[1]), dim=0)
+            selected_edges = query_edges[:, top_indices]
+            selected_edge_types = query_edge_types[top_indices]
+        else:
+            selected_edges = query_edges
+            selected_edge_types = query_edge_types
         
-        # 5. 转换为有序列表（保证可重复性）
-        prompt_entities_list = sorted(list(prompt_entities))
+        logger.debug(f"[Prompt Enhancer] 选中 {selected_edges.shape[1]} 条边（总共有 {query_edges.shape[1]} 条查询关系的边）")
         
-        if len(prompt_entities_list) == 0:
-            return None, []
-        
-        # 6. 构建简化的子图（只包含相关实体）
-        # 过滤边，只保留连接prompt_entities的边（使用向量化操作优化）
-        logger = logging.getLogger(__name__)
-        with timer(f"过滤边 (总边数={data.edge_index.shape[1]}, 实体数={len(prompt_entities_list)})", logger):
-            if data.edge_index.numel() > 0:
-                prompt_entities_set = set(prompt_entities_list)
-                # 使用向量化操作替代循环（快很多）
-                # 将prompt_entities转换为tensor以便向量化比较
-                prompt_entities_tensor = torch.tensor(list(prompt_entities_set), device=device, dtype=torch.long)
-                
-                # 向量化检查：src和dst是否都在prompt_entities中
-                src_nodes = data.edge_index[0]  # [num_edges]
-                dst_nodes = data.edge_index[1]  # [num_edges]
-                
-                # 使用广播和isin操作（比循环快很多）
-                src_in_prompt = torch.isin(src_nodes, prompt_entities_tensor)
-                dst_in_prompt = torch.isin(dst_nodes, prompt_entities_tensor)
-                edge_mask = src_in_prompt & dst_in_prompt
-                
-                filtered_edge_index = data.edge_index[:, edge_mask]
-                filtered_edge_type = data.edge_type[edge_mask]
-            else:
-                filtered_edge_index = data.edge_index
-                filtered_edge_type = data.edge_type
-        
-        # 构建提示图
-        prompt_graph = Data(
-            edge_index=filtered_edge_index,
-            edge_type=filtered_edge_type,
-            num_nodes=len(prompt_entities_list)
-        )
-        
-        return prompt_graph, prompt_entities_list
+        return selected_edges, selected_edge_types
     
-    def encode_prompt_context(self, prompt_graph, query_relation, relation_embeddings=None, prompt_entities=None, data=None, entity_model=None, relation_representations=None):
-        """快速编码提示图上下文
+    def generate_prompt_graph_batch(self, data, query_rels, query_entities, num_samples=None):
+        """批量版：为整个batch找到查询关系相关的边，选择中心度最高的几个
         
         Args:
-            prompt_graph: 提示图
-            query_relation: 查询关系索引
-            relation_embeddings: 关系嵌入矩阵 [num_relations, embedding_dim]，可选
-            prompt_entities: 提示图中的实体列表，用于为每个节点生成不同的初始化
-            data: 图数据对象，用于获取实体相关的边信息或计算实体特征
-            entity_model: EntityNBFNet模型，用于计算实体特征（方案2：最优方案）
-            relation_representations: 关系表示 [num_relations, embedding_dim]，用于EntityNBFNet计算
+            data: 图数据
+            query_rels: [batch_size] 查询关系索引
+            query_entities: [batch_size] 查询实体索引
+            num_samples: 每个查询关系选择的边数
+            
+        Returns:
+            selected_edges_list: List[selected_edges] 每个batch的选中边，或None
+            selected_edge_types_list: List[selected_edge_types] 每个batch的选中边类型，或None
         """
-        if prompt_graph is None:
+        logger = logging.getLogger(__name__)
+        if num_samples is None:
+            num_samples = self.num_prompt_samples
+        
+        batch_size = len(query_rels)
+        device = query_rels.device
+        
+        # 预计算实体度（只需要计算一次）
+        all_nodes = torch.cat([data.edge_index[0], data.edge_index[1]])
+        node_degrees = torch.bincount(all_nodes, minlength=data.num_nodes)
+        
+        selected_edges_list = []
+        selected_edge_types_list = []
+        
+        # 批量处理：按查询关系分组（相同查询关系可以共享边查找结果）
+        unique_query_rels = query_rels.unique()
+        rel_to_edges = {}
+        
+        # 为每个唯一的查询关系找到边
+        for rel in unique_query_rels:
+            edge_mask = (data.edge_type == rel)
+            query_edges = data.edge_index[:, edge_mask]
+            query_edge_types = data.edge_type[edge_mask]
+            
+            if query_edges.shape[1] == 0:
+                rel_to_edges[rel.item()] = (None, None)
+                continue
+            
+            # 如果边数超过num_samples，选择中心度最高的几个
+            if query_edges.shape[1] > num_samples:
+                head_nodes = query_edges[0]
+                tail_nodes = query_edges[1]
+                edge_importance = node_degrees[head_nodes] + node_degrees[tail_nodes]
+                _, top_indices = torch.topk(edge_importance, k=min(num_samples, query_edges.shape[1]), dim=0)
+                selected_edges = query_edges[:, top_indices]
+                selected_edge_types = query_edge_types[top_indices]
+            else:
+                selected_edges = query_edges
+                selected_edge_types = query_edge_types
+            
+            rel_to_edges[rel.item()] = (selected_edges, selected_edge_types)
+        
+        # 为每个batch样本分配对应的边
+        for i in range(batch_size):
+            rel = query_rels[i].item()
+            selected_edges, selected_edge_types = rel_to_edges[rel]
+            selected_edges_list.append(selected_edges)
+            selected_edge_types_list.append(selected_edge_types)
+        
+        logger.debug(f"[Prompt Enhancer] 批量处理完成，batch_size={batch_size}, 唯一查询关系数={len(unique_query_rels)}")
+        
+        return selected_edges_list, selected_edge_types_list
+    
+    def encode_prompt_context(self, selected_edges, selected_edge_types, query_relation, relation_embeddings=None, query_entity=None, data=None):
+        """改进版：使用选中的边信息增强context（中期优化）
+        
+        Args:
+            selected_edges: 选中的边 [2, num_selected]，或None
+            selected_edge_types: 选中的边类型 [num_selected]，或None
+            query_relation: 查询关系索引
+            relation_embeddings: 关系嵌入矩阵 [num_relations, embedding_dim]
+            query_entity: 查询实体索引
+            data: 图数据（用于获取实体信息）
+        """
+        logger = logging.getLogger(__name__)
+        
+        if selected_edges is None or selected_edge_types is None:
             device = query_relation.device if hasattr(query_relation, 'device') else torch.device('cpu')
             return torch.zeros(self.embedding_dim, device=device)
-            
-        # 简化的编码 - 使用平均池化
+        
         device = query_relation.device if hasattr(query_relation, 'device') else torch.device('cpu')
         
-        # 方案2：使用EntityNBFNet计算实体特征（最优方案，有语义意义且考虑图结构）
-        # 优化：限制实体数量以提高速度，只计算最重要的实体
-        # 优化：使用缓存避免重复计算bellmanford（大幅提升速度）
-        # 快速模式：如果实体数量很少，直接使用关系平均嵌入（更快）
-        USE_FAST_MODE = True  # 快速模式：实体数<=10时跳过EntityNBFNet，直接使用关系平均嵌入
-        use_entity_nbfnet = True  # 尝试启用，如果失败会自动回退
-        MAX_ENTITIES_FOR_NBFNET = 30  # 限制最多计算30个实体（快速模式：从100降到30，大幅提升速度）
-        node_embeddings = None
-        if use_entity_nbfnet and entity_model is not None and relation_representations is not None and data is not None and prompt_entities is not None and len(prompt_entities) == prompt_graph.num_nodes:
-            try:
-                # 优化：检查缓存（避免重复计算bellmanford）
-                # 使用relation_representations的hash作为缓存key
-                import hashlib
-                import logging
-                logger = logging.getLogger(__name__)
-                cache_key = None
-                if relation_representations is not None and isinstance(relation_representations, torch.Tensor):
-                    # 优化：使用内容hash而不是data_ptr，提高缓存命中率
-                    # 使用前100个元素和形状作为hash（快速且能区分不同的关系嵌入）
-                    rel_repr_sample = relation_representations.flatten()[:100].detach().cpu().numpy()
-                    import hashlib
-                    rel_repr_bytes = rel_repr_sample.tobytes() + str(tuple(relation_representations.shape)).encode()
-                    rel_repr_hash = int(hashlib.md5(rel_repr_bytes).hexdigest()[:16], 16)  # 使用MD5的前16位作为hash
-                    # 使用data的hash（边数和节点数）
-                    data_hash = hash((
-                        data.edge_index.shape[1] if hasattr(data, 'edge_index') else 0,
-                        data.num_nodes if hasattr(data, 'num_nodes') else 0
-                    ))
-                    cache_key = (rel_repr_hash, data_hash)
-                
-                # 检查缓存
-                cached_result = None
-                if cache_key is not None and cache_key in self._bfnet_cache:
-                    cached_result = self._bfnet_cache[cache_key]
-                    self._cache_hits += 1
-                    logger = logging.getLogger(__name__)
-                    logger.debug(f"[Prompt Enhancer] 缓存命中！已复用EntityNBFNet结果 (缓存命中率: {self._cache_hits}/{self._cache_hits + self._cache_misses})")
-                
-                # 优化：限制实体数量以提高速度
-                prompt_entities_list = list(prompt_entities)
-                
-                # 快速模式：如果实体数量很少（<=10），直接使用关系平均嵌入（更快）
-                if USE_FAST_MODE and len(prompt_entities_list) <= 10 and cached_result is None:
-                    logger = logging.getLogger(__name__)
-                    logger.debug(f"[Prompt Enhancer] 快速模式：实体数({len(prompt_entities_list)})<=10，跳过EntityNBFNet，使用关系平均嵌入")
-                    use_entity_nbfnet = False  # 跳过EntityNBFNet计算
-                
-                if len(prompt_entities_list) > MAX_ENTITIES_FOR_NBFNET:
-                    logger = logging.getLogger(__name__)
-                    logger.debug(f"[Prompt Enhancer] 实体数量({len(prompt_entities_list)})超过限制({MAX_ENTITIES_FOR_NBFNET})，"
-                                f"优先保留查询实体，然后按度排序选择前{MAX_ENTITIES_FOR_NBFNET}个实体")
-                    
-                    # 快速计算实体度（使用bincount）
-                    all_nodes = torch.cat([data.edge_index[0], data.edge_index[1]])
-                    node_degrees = torch.bincount(all_nodes, minlength=data.num_nodes)
-                    
-                    # 优先保留查询实体，然后按度排序
-                    query_entity_id = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
-                    query_entity_set = {query_entity_id} if query_entity_id in prompt_entities_list else set()
-                    
-                    entity_degrees_dict = {e: node_degrees[e].item() if e < len(node_degrees) else 0 
-                                          for e in prompt_entities_list}
-                    sorted_entities = sorted(
-                        prompt_entities_list,
-                        key=lambda e: (e not in query_entity_set, -entity_degrees_dict.get(e, 0))
-                    )
-                    prompt_entities_list = sorted_entities[:MAX_ENTITIES_FOR_NBFNET]
-                
-                # 使用EntityNBFNet的bellmanford计算实体特征（如果快速模式未启用）
-                # 为所有实体批量计算（使用查询关系作为虚拟关系）
-                if not use_entity_nbfnet:
-                    # 快速模式：直接使用关系平均嵌入
-                    node_embeddings = self._fallback_entity_embedding(prompt_entities_list, query_relation, relation_representations, data, device)
-                else:
-                    query_rel_idx = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
-                    
-                    # 准备批量输入：为每个实体创建一个查询
-                    num_entities = len(prompt_entities_list)
-                    h_indices = torch.tensor(prompt_entities_list, device=device, dtype=torch.long)  # [num_entities]
-                    # 使用查询关系作为虚拟关系（或者使用0作为默认关系）
-                    r_indices = torch.full((num_entities,), query_rel_idx, device=device, dtype=torch.long)  # [num_entities]
-                
-                    # 获取实际的EntityNBFNet实例（处理EnhancedEntityNBFNet包装器）
-                    actual_entity_model = entity_model
-                    if hasattr(entity_model, 'entity_model'):
-                        # 如果是EnhancedEntityNBFNet包装器，获取内部的entity_model
-                        actual_entity_model = entity_model.entity_model
-                    
-                    # 检查actual_entity_model是否有bellmanford方法
-                    if not hasattr(actual_entity_model, 'bellmanford'):
-                        raise ValueError(f"entity_model没有bellmanford方法，类型: {type(actual_entity_model)}")
-                
-                    # 设置entity_model的query为relation_representations
-                    # EntityNBFNet的forward方法中会设置self.query = relation_representations
-                    # 但bellmanford需要query是[batch_size, num_relations, embedding_dim]格式
-                    # 我们需要临时设置query，然后批量计算
-                    original_query = None
-                    if hasattr(actual_entity_model, 'query'):
-                        original_query = actual_entity_model.query
-                    
-                    # 使用relation_representations作为query
-                    # relation_representations应该是[num_relations, embedding_dim]
-                    # 需要扩展为[batch_size, num_relations, embedding_dim]以匹配bellmanford的期望
-                    # 检查relation_representations是否为None或无效
-                    if relation_representations is None:
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"[Prompt Enhancer] relation_representations为None，跳过EntityNBFNet计算")
-                        raise ValueError("relation_representations不能为None")
-                    
-                    if not isinstance(relation_representations, torch.Tensor):
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"[Prompt Enhancer] relation_representations不是Tensor，类型: {type(relation_representations)}")
-                        raise ValueError(f"relation_representations必须是Tensor，实际类型: {type(relation_representations)}")
-                    
-                    # 检查relation_representations是否有有效的数据
-                    if relation_representations.numel() == 0:
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"[Prompt Enhancer] relation_representations为空张量")
-                        raise ValueError("relation_representations不能为空张量")
-                    
-                    if relation_representations.dim() == 2:
-                        # 扩展为[batch_size, num_relations, embedding_dim]
-                        # batch_size = num_entities（每个实体一个查询）
-                        query_tensor = relation_representations.unsqueeze(0).expand(num_entities, -1, -1)
-                        actual_entity_model.query = query_tensor
-                    elif relation_representations.dim() == 3:
-                        # 如果已经是3D，检查batch_size是否匹配
-                        if relation_representations.shape[0] == 1:
-                            actual_entity_model.query = relation_representations.expand(num_entities, -1, -1)
-                        else:
-                            actual_entity_model.query = relation_representations
-                    else:
-                        # 如果格式不对，回退到方案1
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"[Prompt Enhancer] relation_representations维度不正确: {relation_representations.shape}")
-                        raise ValueError(f"relation_representations维度不正确: {relation_representations.shape}")
-                    
-                    # 验证query是否成功设置
-                    if not hasattr(actual_entity_model, 'query') or actual_entity_model.query is None:
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"[Prompt Enhancer] 无法设置entity_model.query")
-                        raise ValueError("无法设置entity_model.query")
-                    
-                    # 设置layers的relation（EntityNBFNet的forward方法中会设置这个）
-                    # 这对于bellmanford中的layers正常工作很重要
-                    if hasattr(actual_entity_model, 'layers'):
-                        # 使用relation_representations设置每个layer的relation
-                        # 注意：当project_relations=True时，layer.relation应该是[num_relations, embedding_dim]
-                        # 但需要确保num_relations >= data.edge_type.max() + 1（因为edge_type可能包含逆关系）
-                        # 如果relation_representations的num_relations不够，需要扩展
-                        max_edge_type = data.edge_type.max().item() if data.edge_type.numel() > 0 else 0
-                        required_num_relations = max_edge_type + 1
-                        actual_num_relations = relation_representations.shape[0]
-                        
-                        logger = logging.getLogger(__name__)
-                        if actual_num_relations < required_num_relations:
-                            # 需要扩展relation_representations以匹配edge_type的最大值
-                            logger.warning(f"[Prompt Enhancer] relation_representations的关系数({actual_num_relations}) "
-                                         f"小于edge_type的最大值({max_edge_type})，需要扩展到{required_num_relations}")
-                            # 使用零向量填充
-                            padding_size = required_num_relations - actual_num_relations
-                            padding = torch.zeros(padding_size, relation_representations.shape[1], 
-                                                device=relation_representations.device, 
-                                                dtype=relation_representations.dtype)
-                            extended_relation_representations = torch.cat([relation_representations, padding], dim=0)
-                        else:
-                            extended_relation_representations = relation_representations
-                        
-                        logger.debug(f"[Prompt Enhancer] 设置layers的relation: shape={extended_relation_representations.shape}, "
-                                   f"required_num_relations={required_num_relations}, max_edge_type={max_edge_type}")
-                        
-                        # 设置每个layer的relation
-                        for layer in actual_entity_model.layers:
-                            if hasattr(layer, 'relation'):
-                                layer.relation = extended_relation_representations
-                    
-                    # 计算实体特征（批量计算）
-                    # 注意：这里使用torch.no_grad()以避免影响主模型的梯度
-                    # 但如果是在训练时，可能需要保留梯度（取决于需求）
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.debug(f"[Prompt Enhancer] 使用EntityNBFNet计算{num_entities}个实体的特征，"
-                                f"query形状={actual_entity_model.query.shape if hasattr(actual_entity_model, 'query') else 'None'}")
-                    
-                    # 优化：如果缓存命中，直接使用缓存结果
-                    if cached_result is not None:
-                        entity_features = cached_result["node_feature"]  # [num_entities, num_nodes, feature_dim]
-                        logger.info(f"[Prompt Enhancer] ✅ 使用缓存的EntityNBFNet结果，特征形状: {entity_features.shape}")
-                    else:
-                        # 缓存未命中，需要计算
-                        self._cache_misses += 1
-                        logger.debug(f"[Prompt Enhancer] 缓存未命中，计算EntityNBFNet (缓存命中率: {self._cache_hits}/{self._cache_hits + self._cache_misses})")
-                        
-                        # 优化：使用torch.no_grad()和eval模式以提高速度并减少内存占用
-                        actual_entity_model.eval()  # 临时设置为eval模式，避免dropout等
-                        was_training = actual_entity_model.training
-                        try:
-                            with torch.no_grad():  # 推理时不需要梯度，避免影响主模型，同时提升速度
-                                entity_features_dict = actual_entity_model.bellmanford(data, h_indices, r_indices)
-                                entity_features = entity_features_dict["node_feature"]  # [num_entities, num_nodes, feature_dim]
-                                logger.info(f"[Prompt Enhancer] ✅ EntityNBFNet计算成功！特征形状: {entity_features.shape}, "
-                                           f"实体数={num_entities}, feature_dim={entity_features.shape[-1]}")
-                                
-                                # 缓存结果（如果缓存未满）
-                                # 内存优化：如果缓存已满，清理最旧的缓存项（FIFO策略）
-                                if cache_key is not None:
-                                    if len(self._bfnet_cache) >= self._max_cache_size:
-                                        # 清理最旧的缓存项（删除第一个）
-                                        oldest_key = next(iter(self._bfnet_cache))
-                                        del self._bfnet_cache[oldest_key]
-                                        logger.debug(f"[Prompt Enhancer] 缓存已满，清理最旧缓存项 (当前大小: {len(self._bfnet_cache)})")
-                                    self._bfnet_cache[cache_key] = entity_features_dict
-                                    logger.debug(f"[Prompt Enhancer] 已缓存EntityNBFNet结果 (缓存大小: {len(self._bfnet_cache)})")
-                        except Exception as e:
-                            logger.warning(f"[Prompt Enhancer] EntityNBFNet计算失败: {e}")
-                            raise
-                        finally:
-                            # 恢复原始状态
-                            if original_query is not None:
-                                actual_entity_model.query = original_query
-                        actual_entity_model.train(was_training)
-                    
-                    # 优化：批量提取和投影实体特征（向量化操作）
-                    # entity_features形状: [num_entities, num_nodes, feature_dim]
-                    # 对于实体i，它在图中的节点ID是prompt_entities_list[i]，特征在entity_features[i, prompt_entities_list[i], :]
-                    feature_dim = entity_features.shape[-1]
-                    
-                    # 批量提取特征：使用索引选择
-                    entity_indices = torch.arange(num_entities, device=device)
-                    node_indices = torch.tensor(prompt_entities_list, device=device, dtype=torch.long)
-                    
-                    # 确保索引在有效范围内
-                    valid_mask = (entity_indices < entity_features.shape[0]) & (node_indices < entity_features.shape[1])
-                    valid_entity_indices = entity_indices[valid_mask]
-                    valid_node_indices = node_indices[valid_mask]
-                    
-                    # 批量提取特征 [num_valid, feature_dim]
-                    if len(valid_entity_indices) > 0:
-                        extracted_features = entity_features[valid_entity_indices, valid_node_indices, :]  # [num_valid, feature_dim]
-                        
-                        # 使用投影层将feature_dim映射到embedding_dim
-                        feature_dim_str = str(feature_dim)
-                        if feature_dim_str in self.entity_feature_proj:
-                            proj_layer = self.entity_feature_proj[feature_dim_str]
-                        else:
-                            # 动态创建投影层（优化：只创建实际使用的，节省参数）
-                            # 对于常见维度（128, 448），使用单层Linear（更高效）
-                            # 对于其他维度，使用两层MLP（更灵活）
-                            if feature_dim in [128, 448]:
-                                # 单层Linear：更高效，参数更少
-                                proj_layer = nn.Linear(feature_dim, self.embedding_dim).to(device)
-                            else:
-                                # 两层MLP：适用于其他维度
-                                proj_layer = nn.Sequential(
-                                    nn.Linear(feature_dim, self.embedding_dim * 2),
-                                    nn.ReLU(),
-                                    nn.Linear(self.embedding_dim * 2, self.embedding_dim)
-                                ).to(device)
-                            # 保存到ModuleDict中（需要先注册为子模块）
-                            self.add_module(f'entity_feature_proj_{feature_dim_str}', proj_layer)
-                            self.entity_feature_proj[feature_dim_str] = proj_layer
-                        
-                        # 批量投影 [num_valid, feature_dim] -> [num_valid, embedding_dim]
-                        projected_features = proj_layer(extracted_features)  # [num_valid, embedding_dim]
-                        
-                        # 内存优化：释放中间结果（extracted_features不再需要）
-                        del extracted_features
-                        
-                        # 初始化所有节点的嵌入（使用全局平均作为默认值）
-                        global_avg = relation_embeddings.mean(dim=0) if relation_embeddings is not None and relation_embeddings.shape[0] > 0 else None
-                        node_embeddings = torch.zeros(prompt_graph.num_nodes, self.embedding_dim, device=device)
-                        
-                        if global_avg is not None:
-                            node_embeddings[:] = global_avg.unsqueeze(0).expand(prompt_graph.num_nodes, -1)
-                        
-                        # 将投影后的特征赋值给对应的节点
-                        valid_prompt_indices = torch.arange(len(prompt_entities_list), device=device)[valid_mask]
-                        node_embeddings[valid_prompt_indices] = projected_features
-                    else:
-                        # 如果没有有效特征，使用全局平均
-                        global_avg = relation_embeddings.mean(dim=0) if relation_embeddings is not None and relation_embeddings.shape[0] > 0 else None
-                        node_embeddings = torch.zeros(prompt_graph.num_nodes, self.embedding_dim, device=device)
-                        if global_avg is not None:
-                            node_embeddings[:] = global_avg.unsqueeze(0).expand(prompt_graph.num_nodes, -1)
-                
-            except Exception as e:
-                # 如果EntityNBFNet计算失败，回退到方案1（使用关系平均嵌入）
-                logger = logging.getLogger(__name__)
-                logger.warning(f"[Prompt Enhancer] EntityNBFNet计算失败，回退到关系平均嵌入方案: {e}")
-                import warnings
-                # 只在DEBUG模式下显示警告，避免日志过多
-                if logger.level <= logging.DEBUG:
-                    warnings.warn(f"EntityNBFNet计算失败，回退到关系平均嵌入方案: {e}")
-                node_embeddings = None  # 标记为失败，将使用方案1
+        if relation_embeddings is None or relation_embeddings.shape[0] == 0:
+            logger.warning(f"[Prompt Enhancer] 未提供关系嵌入，返回零向量")
+            return torch.zeros(self.embedding_dim, device=device)
         
-        # 方案1：使用实体相关的所有关系的平均嵌入（回退方案）
-        # 只有在方案2失败或未启用时才使用
-        if node_embeddings is None:
-            if relation_embeddings is not None and relation_embeddings.shape[0] > 0:
-                node_embeddings = self._fallback_entity_embedding(
-                    prompt_graph, query_relation, relation_embeddings, prompt_entities, data, device
-                )
-            else:
-                # 回退：如果没有关系嵌入，使用改进的初始化策略
-                if self.training:
-                    # 训练时：使用随机初始化以增加多样性
-                    node_embeddings = torch.randn(prompt_graph.num_nodes, self.embedding_dim, device=device)
-                else:
-                    # 推理时：使用小的固定值而不是零向量（比零向量稍好）
-                    # 使用查询关系索引的哈希值作为种子，保证可重复性
-                    import hashlib
-                    seed = int(hashlib.md5(str(query_relation.item()).encode()).hexdigest()[:8], 16) % (2**32)
-                    torch.manual_seed(seed)
-                    node_embeddings = torch.randn(prompt_graph.num_nodes, self.embedding_dim, device=device) * 0.01
-                    torch.manual_seed(torch.initial_seed())  # 恢复随机种子
+        query_rel_idx = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
         
-        # 使用简化的编码器
-        encoded_embeddings = self.prompt_encoder(node_embeddings)
-        
-        # 全局平均池化
-        context_embedding = torch.mean(encoded_embeddings, dim=0)
-        
-        return context_embedding
-    
-    def _fallback_entity_embedding(self, prompt_graph, query_relation, relation_embeddings, prompt_entities, data, device):
-        """回退方案：使用实体相关的所有关系的平均嵌入"""
-        try:
-            node_embeddings = torch.zeros(prompt_graph.num_nodes, self.embedding_dim, device=device)
-        except RuntimeError as e:
-            # 如果CUDA错误，尝试在CPU上创建然后移到GPU
-            logger = logging.getLogger(__name__)
-            logger.warning(f"[Prompt Enhancer] 在GPU上创建零向量失败，尝试在CPU上创建: {e}")
-            node_embeddings = torch.zeros(prompt_graph.num_nodes, self.embedding_dim, device='cpu')
-            if device.type == 'cuda':
-                node_embeddings = node_embeddings.to(device)
-        
-        # 如果有实体列表和图数据，使用实体相关的所有关系的平均嵌入
-        # 优化：批量计算所有实体的嵌入，避免循环
-        if prompt_entities is not None and len(prompt_entities) == prompt_graph.num_nodes and data is not None:
-            # 批量计算：为所有实体一次性找到相关的边
-            prompt_entities_tensor = torch.tensor(prompt_entities, device=device, dtype=torch.long)
-            
-            # 向量化查找：找到所有与prompt_entities相关的边
-            src_mask = torch.isin(data.edge_index[0], prompt_entities_tensor)
-            dst_mask = torch.isin(data.edge_index[1], prompt_entities_tensor)
-            relevant_edge_mask = src_mask | dst_mask
-            
-            if relevant_edge_mask.any():
-                # 获取所有相关边的关系类型
-                relevant_rels = data.edge_type[relevant_edge_mask]
-                valid_rels = relevant_rels[relevant_rels < relation_embeddings.shape[0]]
-                
-                # 为每个实体计算其相关关系的平均嵌入
-                for i, entity_id in enumerate(prompt_entities):
-                    # 找到包含该实体的边（在相关边中）
-                    entity_edge_mask = ((data.edge_index[0] == entity_id) | (data.edge_index[1] == entity_id)) & relevant_edge_mask
-                    if entity_edge_mask.any():
-                        # 获取这些边的关系类型
-                        entity_rels = data.edge_type[entity_edge_mask]
-                        valid_entity_rels = entity_rels[entity_rels < relation_embeddings.shape[0]]
-                        if len(valid_entity_rels) > 0:
-                            entity_emb = relation_embeddings[valid_entity_rels].mean(dim=0)
-                        else:
-                            entity_emb = relation_embeddings.mean(dim=0)
-                    else:
-                        entity_emb = relation_embeddings.mean(dim=0)
-                    
-                    node_embeddings[i] = entity_emb
-            else:
-                # 如果没有相关边，所有实体都使用全局平均
-                global_avg = relation_embeddings.mean(dim=0)
-                node_embeddings[:] = global_avg
-        elif prompt_entities is not None and len(prompt_entities) == prompt_graph.num_nodes:
-            # 如果没有图数据，使用查询关系嵌入 + 基于实体ID的小变化（回退方案）
-            query_rel_idx = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
-            if query_rel_idx < relation_embeddings.shape[0]:
-                base_embedding = relation_embeddings[query_rel_idx]
-            else:
-                base_embedding = relation_embeddings.mean(dim=0)
-            
-            for i, entity_id in enumerate(prompt_entities):
-                # 使用实体ID的哈希值生成确定性的变化（保证可重复性）
-                import hashlib
-                seed = int(hashlib.md5(str(entity_id).encode()).hexdigest()[:8], 16) % (2**32)
-                torch.manual_seed(seed)
-                variation = torch.randn(self.embedding_dim, device=device) * 0.1
-                torch.manual_seed(torch.initial_seed())
-                node_embeddings[i] = base_embedding + variation
+        # 基础：使用查询关系的嵌入
+        if query_rel_idx >= relation_embeddings.shape[0]:
+            logger.warning(f"[Prompt Enhancer] 查询关系索引 {query_rel_idx} 超出范围，使用全局平均")
+            base_context = relation_embeddings.mean(dim=0)  # [embedding_dim]
         else:
-            # 如果没有实体列表，使用查询关系嵌入 + 基于索引的变化
-            query_rel_idx = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
-            if query_rel_idx < relation_embeddings.shape[0]:
-                base_embedding = relation_embeddings[query_rel_idx]
-            else:
-                base_embedding = relation_embeddings.mean(dim=0)
-            
-            for i in range(prompt_graph.num_nodes):
-                import hashlib
-                seed = int(hashlib.md5(str(i).encode()).hexdigest()[:8], 16) % (2**32)
-                torch.manual_seed(seed)
-                variation = torch.randn(self.embedding_dim, device=device) * 0.1
-                torch.manual_seed(torch.initial_seed())
-                node_embeddings[i] = base_embedding + variation
+            base_context = relation_embeddings[query_rel_idx]  # [embedding_dim]
         
-        # 训练时添加额外的随机噪声以增加多样性
+        # 中期优化：利用选中的边信息增强context
+        # 使用选中边的实体对信息（通过关系嵌入的加权平均）
+        num_selected = selected_edges.shape[1]
+        if num_selected > 0:
+            # 提取选中边的实体对
+            head_entities = selected_edges[0]  # [num_selected]
+            tail_entities = selected_edges[1]  # [num_selected]
+            
+            # 方案1：使用选中边的数量作为权重（边越多，增强越强）
+            # 方案2：使用选中边的中心度作为权重（已经在generate_prompt_graph中计算过）
+            # 简化：使用均匀权重，但根据边数调整增强强度
+            edge_weight = min(1.0, num_selected / self.num_prompt_samples)  # 归一化到[0,1]
+            
+            # 使用选中边的关系嵌入（都是查询关系类型）的加权平均
+            # 由于所有边都是查询关系类型，可以直接使用base_context
+            # 但我们可以根据边数调整：边数越多，context越"丰富"
+            enhanced_context = base_context * (1.0 + 0.1 * edge_weight)  # 轻微增强
+            
+            logger.debug(f"[Prompt Enhancer] 使用选中边增强context: 边数={num_selected}, 增强权重={edge_weight:.3f}")
+            return enhanced_context
+        else:
+            return base_context
+    
+    def encode_prompt_context_batch(self, selected_edges_list, selected_edge_types_list, query_rels, relation_embeddings, query_entities, data):
+        """批量版：为整个batch编码提示图上下文
+        
+        Args:
+            selected_edges_list: List[selected_edges] 每个batch的选中边
+            selected_edge_types_list: List[selected_edge_types] 每个batch的选中边类型
+            query_rels: [batch_size] 查询关系索引
+            relation_embeddings: [batch_size, num_relations, embedding_dim] 或 [num_relations, embedding_dim] 关系嵌入矩阵
+            query_entities: [batch_size] 查询实体索引
+            data: 图数据
+            
+        Returns:
+            context_embeddings: [batch_size, embedding_dim] 每个batch的context嵌入
+        """
+        batch_size = len(query_rels)
+        device = query_rels.device
+        embedding_dim = self.embedding_dim
+        
+        context_embeddings = torch.zeros(batch_size, embedding_dim, device=device)
+        
+        # 处理relation_embeddings的维度
+        if relation_embeddings.dim() == 3:
+            # [batch_size, num_relations, embedding_dim] - 每个batch有自己的关系嵌入
+            use_batch_specific = True
+        else:
+            # [num_relations, embedding_dim] - 共享的关系嵌入
+            use_batch_specific = False
+        
+        for i in range(batch_size):
+            selected_edges = selected_edges_list[i]
+            selected_edge_types = selected_edge_types_list[i]
+            query_rel = query_rels[i]
+            query_entity = query_entities[i]
+            
+            # 选择对应的关系嵌入
+            if use_batch_specific:
+                rel_emb = relation_embeddings[i]  # [num_relations, embedding_dim]
+            else:
+                rel_emb = relation_embeddings  # [num_relations, embedding_dim]
+            
+            context = self.encode_prompt_context(
+                selected_edges, selected_edge_types, query_rel, 
+                rel_emb, query_entity, data
+            )
+            context_embeddings[i] = context
+        
+        return context_embeddings
+    
+    def _improved_entity_embedding(self, prompt_graph, query_relation, query_entity, relation_embeddings, device):
+        """改进方案：基于节点在图中的位置和连接关系初始化嵌入"""
+        # 获取查询关系嵌入
+        query_rel_idx = query_relation.item() if isinstance(query_relation, torch.Tensor) else query_relation
+        
+        if query_rel_idx < relation_embeddings.shape[0]:
+            base_embedding = relation_embeddings[query_rel_idx]  # [embedding_dim]
+        else:
+            # 如果查询关系索引无效，使用全局平均
+            base_embedding = relation_embeddings.mean(dim=0)  # [embedding_dim]
+        
+        num_nodes = prompt_graph.num_nodes
+        node_embeddings = torch.zeros(num_nodes, self.embedding_dim, device=device)
+        
+        # 计算每个节点的特征
+        query_entity_id = query_entity.item() if isinstance(query_entity, torch.Tensor) else query_entity
+        
+        # 计算节点度（如果图有边）
+        if prompt_graph.edge_index.numel() > 0:
+            # 计算每个节点的度（在prompt_graph中的度）
+            src_nodes = prompt_graph.edge_index[0]
+            node_degrees = torch.bincount(src_nodes, minlength=num_nodes).float()
+            # 归一化度
+            max_degree = node_degrees.max()
+            if max_degree > 0:
+                normalized_degrees = node_degrees / (max_degree + 1e-8)
+            else:
+                normalized_degrees = torch.ones(num_nodes, device=device) * 0.5
+        else:
+            normalized_degrees = torch.ones(num_nodes, device=device) * 0.5
+        
+        # 为每个节点生成不同的嵌入
+        for i in range(num_nodes):
+            # 基于节点度生成变化（度高的节点更接近base_embedding，度低的节点有更多变化）
+            degree_factor = normalized_degrees[i].item()
+            
+            # 使用节点索引和查询实体的哈希值生成确定性的变化
+            import hashlib
+            seed = int(hashlib.md5(f"{i}_{query_entity_id}_{query_rel_idx}".encode()).hexdigest()[:8], 16) % (2**32)
+            torch.manual_seed(seed)
+            variation = torch.randn(self.embedding_dim, device=device) * (1 - degree_factor) * 0.1
+            torch.manual_seed(torch.initial_seed())
+            
+            # 结合base_embedding和变化
+            node_embeddings[i] = base_embedding + variation
+        
+        # 训练时添加小的随机噪声以增加多样性
         if self.training:
-            noise_scale = 0.05  # 减小噪声幅度，因为已经有了基于实体的变化
+            noise_scale = 0.02  # 很小的噪声，避免过度影响
             node_embeddings = node_embeddings + torch.randn_like(node_embeddings) * noise_scale
         
         return node_embeddings
@@ -1706,7 +1520,9 @@ class EnhancedUltra(nn.Module):
         import os
         current_file = os.path.abspath(__file__)
         project_root = os.path.dirname(os.path.dirname(current_file))
-        flags = parse.load_flags(os.path.join(project_root, "flags.yaml"))
+        # 在__init__中加载flags一次，避免在forward中重复加载
+        self.flags = parse.load_flags(os.path.join(project_root, "flags.yaml"))
+        flags = self.flags
         
         # 原始模型组件
         self.relation_model = RelNBFNet(**rel_model_cfg)
@@ -1723,43 +1539,93 @@ class EnhancedUltra(nn.Module):
         # use_learnable_fusion可以通过学习权重为0来"关闭"增强，功能更强大
         self.use_adaptive_gate = False  # 已废弃，保留为False以保持兼容性
         
-        # 增强器权重配置：控制两个增强器的贡献强度（用于固定权重模式）
+        # 增强器权重配置：仅用于固定权重模式（当use_learnable_fusion=False时）
+        # 当use_learnable_fusion=True时，这些权重不会被使用，融合权重会自动学习
         self.similarity_enhancer_weight = getattr(flags, 'similarity_enhancer_weight', 1.0)
         self.prompt_enhancer_weight = getattr(flags, 'prompt_enhancer_weight', 1.0)
         
-        # 可学习的融合权重（方案3：可学习融合 - 增量融合方式）
-        # 增量融合：r + w[0]*r1_delta + w[1]*r2_delta
-        # 只学习两个增强器的权重，原始r直接保留（不加权）
+        # 可学习的融合权重（2权重归一化方案，更清晰且无冗余）
+        # 融合公式：enhanced = w_base*r + w_enhance*(r + w_sim*r1_delta + w_prompt*r2_delta)
+        # 其中 w_base + w_enhance = 1 (softmax归一化)
+        # w_sim 和 w_prompt 是增强器内部的权重分配（归一化）
+        # 这样设计避免了3权重方案中的冗余问题
         use_learnable_fusion = getattr(flags, 'use_learnable_fusion', True)  # 默认启用可学习融合
         self.use_learnable_fusion = use_learnable_fusion
         
         if self.use_learnable_fusion:
-            # 初始化：基于flags.yaml中的权重，只初始化两个增强器的权重
-            # 初始权重：[similarity_enhancer的权重, prompt_enhancer的权重]
-            initial_sim_weight = self.similarity_enhancer_weight
-            initial_prompt_weight = self.prompt_enhancer_weight
+            # 智能初始化：2个主权重 [原始r的权重, 增强的权重]
+            # 基于增强器的启用状态自动计算合理的初始值，不依赖配置文件
             
-            # 归一化两个增强器的初始权重（使它们和为1）
-            total = initial_sim_weight + initial_prompt_weight
-            if total > 0:
-                initial_weights = torch.tensor([
-                    initial_sim_weight / total,
-                    initial_prompt_weight / total
-                ])
+            epsilon = 1e-3  # 禁用时的最小权重（避免完全为0导致梯度问题）
+            
+            # 计算启用的增强器数量
+            num_enabled_enhancers = sum([self.use_similarity_enhancer, self.use_prompt_enhancer])
+            
+            if num_enabled_enhancers == 0:
+                # 没有启用任何增强器：原始r占主导
+                initial_base_weight = 0.95
+                initial_enhance_weight = 0.05
+            elif num_enabled_enhancers == 1:
+                # 只启用一个增强器：原始r占70%，增强占30%
+                initial_base_weight = 0.7
+                initial_enhance_weight = 0.3
             else:
-                # 如果总权重为0，使用均匀初始化
-                initial_weights = torch.tensor([0.5, 0.5])
+                # 两个增强器都启用：原始r占60%，增强占40%
+                initial_base_weight = 0.6
+                initial_enhance_weight = 0.4
+            
+            # 归一化两个主权重（确保和为1）
+            total = initial_base_weight + initial_enhance_weight
+            initial_main_weights = torch.tensor([
+                initial_base_weight / total,
+                initial_enhance_weight / total
+            ])
+            
+            # 增强器内部权重分配（用于分配r1_delta和r2_delta的权重）
+            if num_enabled_enhancers == 0:
+                initial_sim_ratio = 0.5  # 未使用，但需要初始化
+                initial_prompt_ratio = 0.5
+            elif num_enabled_enhancers == 1:
+                if self.use_similarity_enhancer:
+                    initial_sim_ratio = 1.0
+                    initial_prompt_ratio = epsilon
+                else:
+                    initial_sim_ratio = epsilon
+                    initial_prompt_ratio = 1.0
+            else:
+                # 两个都启用：平分权重
+                initial_sim_ratio = 0.5
+                initial_prompt_ratio = 0.5
+            
+            # 归一化增强器内部权重
+            total_enhance = initial_sim_ratio + initial_prompt_ratio
+            initial_enhance_weights = torch.tensor([
+                initial_sim_ratio / total_enhance,
+                initial_prompt_ratio / total_enhance
+            ])
             
             # 转换为logits（使用log-softmax的逆变换）
-            # 为了避免log(0)，添加小的epsilon
-            epsilon = 1e-8
-            initial_weights = torch.clamp(initial_weights, min=epsilon, max=1.0-epsilon)
-            logits = torch.log(initial_weights)
+            initial_main_weights = torch.clamp(initial_main_weights, min=epsilon, max=1.0-epsilon)
+            initial_enhance_weights = torch.clamp(initial_enhance_weights, min=epsilon, max=1.0-epsilon)
+            main_logits = torch.log(initial_main_weights)
+            enhance_logits = torch.log(initial_enhance_weights)
             
-            # 注册为可学习参数（只有2个权重：w[0]=similarity, w[1]=prompt）
-            self.fusion_weights_logits = nn.Parameter(logits)
+            # 注册为可学习参数
+            # main_weights: [w_base, w_enhance]
+            # enhance_weights: [w_sim, w_prompt] (用于分配r1_delta和r2_delta的权重)
+            self.fusion_main_weights_logits = nn.Parameter(main_logits)
+            self.fusion_enhance_weights_logits = nn.Parameter(enhance_logits)
+            
+            # 记录初始权重（用于调试）
+            logger = logging.getLogger(__name__)
+            logger.info(f"[EnhancedUltra] 融合权重初始化 (2权重方案): "
+                       f"原始r={initial_main_weights[0]:.3f}, "
+                       f"增强={initial_main_weights[1]:.3f}, "
+                       f"增强内部分配: 相似度={initial_enhance_weights[0]:.3f} (启用={self.use_similarity_enhancer}), "
+                       f"提示图={initial_enhance_weights[1]:.3f} (启用={self.use_prompt_enhancer})")
         else:
-            self.fusion_weights_logits = None
+            self.fusion_main_weights_logits = None
+            self.fusion_enhance_weights_logits = None
         
         # 提示图增强模块（保留原有功能，可通过配置禁用）
         if self.use_prompt_enhancer:
@@ -1775,15 +1641,15 @@ class EnhancedUltra(nn.Module):
         
         # 基于相似度的关系增强模块（新增，可通过配置禁用）
         if self.use_similarity_enhancer:
-            # 从flags.yaml读取初始值，如果没有则使用默认值
-            similarity_threshold_init = getattr(flags, 'similarity_threshold_init', 0.8)
-            enhancement_strength_init = getattr(flags, 'enhancement_strength_init', 0.05)
             max_similar_relations = getattr(flags, 'max_similar_relations', 10)  # 只使用top-10个最相似的关系
             
+            # 使用合理的默认初始值（不依赖配置文件）
+            # similarity_threshold: 初始化为0.75（中等阈值，经过sigmoid映射）
+            # enhancement_strength: 初始化为0.05（较小的增强强度，避免一开始就过度影响）
             self.similarity_enhancer = SimilarityBasedRelationEnhancer(
                 embedding_dim=64,
-                similarity_threshold_init=similarity_threshold_init,
-                enhancement_strength_init=enhancement_strength_init,
+                similarity_threshold_init=0.75,  # 合理的默认值：中等相似度阈值
+                enhancement_strength_init=0.05,  # 合理的默认值：较小的增强强度
                 max_similar_relations=max_similar_relations  # 只使用最重要的几个关系
             )
         else:
@@ -1802,15 +1668,23 @@ class EnhancedUltra(nn.Module):
                             "Adaptive gate requires similarity enhancer, disabling gate.")
                 self.use_adaptive_gate = False
         
-        # 实体-关系联合增强模块（方案3：实体增强）
-        use_entity_enhancement = getattr(flags, 'use_entity_enhancement', True)  # 默认启用
-        self.use_entity_enhancement = use_entity_enhancement
-        if self.use_entity_enhancement:
-            self.entity_enhancer = EntityRelationJointEnhancer(embedding_dim=64)
-            # 使用增强版EntityNBFNet包装原始entity_model
-            self.entity_model = EnhancedEntityNBFNet(self.entity_model, self.entity_enhancer)
+        # 实体增强已移除，直接使用原始entity_model
+        self.use_entity_enhancement = False
+        self.entity_enhancer = None
+        
+        # 增强置信度机制（用于评估增强增量的可靠性）
+        # 如果置信度低，则减少增强的影响
+        embedding_dim = 64  # 固定为64维（与模型其他部分一致）
+        self.use_enhancement_confidence = getattr(flags, 'use_enhancement_confidence', True)  # 默认启用
+        if self.use_enhancement_confidence:
+            self.enhancement_confidence = nn.Sequential(
+                nn.Linear(embedding_dim * 2, embedding_dim // 2),  # 输入：r和combined_delta
+                nn.ReLU(),
+                nn.Linear(embedding_dim // 2, 1),
+                nn.Sigmoid()  # 输出0-1之间的置信度
+            )
         else:
-            self.entity_enhancer = None
+            self.enhancement_confidence = None
         
         # 存储表示
         self.relation_representations_structural = None
@@ -1818,10 +1692,31 @@ class EnhancedUltra(nn.Module):
         self.final_relation_representations = None
         self.enhanced_relation_representations = None
         
+        # 打印模型配置信息
+        logger = logging.getLogger(__name__)
+        logger.info("=" * 80)
+        logger.info("[EnhancedUltra] 模型初始化完成")
+        logger.info(f"  - 相似度增强器: {'启用' if self.use_similarity_enhancer else '禁用'}")
+        logger.info(f"  - 提示图增强器: {'启用' if self.use_prompt_enhancer else '禁用'}")
+        logger.info(f"  - 可学习融合: {'启用' if self.use_learnable_fusion else '禁用'}")
+        logger.info(f"  - 增强置信度: {'启用' if self.use_enhancement_confidence else '禁用'}")
+        if self.use_prompt_enhancer:
+            logger.info(f"  - 提示图参数: max_hops={getattr(flags, 'max_hops', 1)}, num_samples={getattr(flags, 'num_prompt_samples', 3)}")
+        if self.use_similarity_enhancer:
+            logger.info(f"  - 相似度参数: max_similar_relations={getattr(flags, 'max_similar_relations', 10)}")
+        logger.info("=" * 80)
+        
     def forward(self, data, batch, is_tail=False):
         """增强版前向传播 - 根据配置使用自适应门控机制"""
         logger = logging.getLogger(__name__)
-        logger.debug(f"[EnhancedUltra] Forward开始，batch_size={len(batch)}")
+        batch_size = len(batch)
+        
+        # 减少日志打印频率：每50个batch打印一次
+        if not hasattr(self, '_forward_log_counter'):
+            self._forward_log_counter = 0
+        self._forward_log_counter += 1
+        if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+            logger.info(f"[EnhancedUltra] 开始前向传播，batch_size={batch_size}, 训练模式={self.training} (batch #{self._forward_log_counter})")
         
         query_rels = batch[:, 0, 2]
         query_rels_traverse = batch[:, 0, :]
@@ -1834,135 +1729,189 @@ class EnhancedUltra(nn.Module):
             logger.debug(f"[EnhancedUltra] GPU内存: 已分配={memory_allocated:.2f}GB, 已保留={memory_reserved:.2f}GB")
         
         # 获取基础关系表示（使用原始逻辑）
-        from ultra import parse
-        current_file = os.path.abspath(__file__)
-        project_root = os.path.dirname(os.path.dirname(current_file))
-        flags = parse.load_flags(os.path.join(project_root, "flags.yaml"))
+        # 使用在__init__中已加载的flags，避免重复加载
+        flags = self.flags
         
         if flags.run == "semma" or flags.run == "EnhancedUltra":
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info("[EnhancedUltra] 步骤1/4: 获取基础关系表示 (SEMMA模式)")
             with timer("Relation Model (structural)", logger):
                 self.relation_representations_structural = self.relation_model(data, query=query_rels)
+            logger.debug(f"  - 结构关系表示形状: {self.relation_representations_structural.shape}")
+            
             with timer("Semantic Model", logger):
                 self.relation_representations_semantic = self.semantic_model(data, query=query_rels)
+            logger.debug(f"  - 语义关系表示形状: {self.relation_representations_semantic.shape}")
+            
             with timer("Combiner", logger):
                 self.final_relation_representations = self.combiner(
                     self.relation_representations_structural, 
                     self.relation_representations_semantic
                 )
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 融合后关系表示形状: {self.final_relation_representations.shape}")
         else:
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info("[EnhancedUltra] 步骤1/4: 获取基础关系表示 (单模型模式)")
             with timer("Relation Model", logger):
                 self.relation_representations_structural = self.relation_model(data, query=query_rels)
             self.final_relation_representations = self.relation_representations_structural
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 关系表示形状: {self.final_relation_representations.shape}")
         
         # 应用增强模块（并行融合方式）
         # 原始表示 r (SEMMA融合后的嵌入)
         r = self.final_relation_representations  # [batch_size, num_relations, embedding_dim]
         batch_size = len(query_rels)
         
-        logger.debug(f"[EnhancedUltra] 开始并行增强，r形状={r.shape}")
+        if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+            logger.info(f"[EnhancedUltra] 步骤2/4: 应用增强模块，r形状={r.shape}")
         
         # 并行获取两个增强器的增量（都基于原始表示r）
         # r1: similarity_enhancer的增量
         if self.use_similarity_enhancer and self.similarity_enhancer is not None:
-            logger.debug(f"[EnhancedUltra] 应用similarity_enhancer")
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 应用相似度增强器 (max_similar_relations={self.similarity_enhancer.max_similar_relations})")
             with timer("Similarity Enhancer", logger):
                 r1_delta = self.similarity_enhancer(
                     r, 
                     query_rels,
                     return_enhancement_only=True  # 只返回增强增量
                 )  # [batch_size, num_relations, embedding_dim]
-            logger.debug(f"[EnhancedUltra] similarity_enhancer完成，r1_delta形状={r1_delta.shape}")
+            r1_delta_norm = torch.norm(r1_delta, dim=-1).mean().item()
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 相似度增强完成，r1_delta形状={r1_delta.shape}，平均L2范数={r1_delta_norm:.4f}")
         else:
             r1_delta = torch.zeros_like(r)
+            logger.debug("  - 相似度增强器未启用，使用零增量")
         
-        # r2: prompt_enhancer的增量（只增强查询关系）
-        # 同时收集提示图中的实体，用于实体增强（避免重复计算）
-        all_prompt_entities = None  # 收集所有batch的提示图实体
+        # r2: prompt_enhancer的增量（只增强查询关系）- 批量处理优化
         if self.use_prompt_enhancer and self.prompt_enhancer is not None:
-            logger.debug(f"[EnhancedUltra] 应用prompt_enhancer，batch_size={batch_size}")
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 应用提示图增强器 (max_hops={self.prompt_enhancer.max_hops}, num_samples={self.prompt_enhancer.num_prompt_samples}) [批量处理模式]")
             r2_delta = torch.zeros_like(r)
-            all_prompt_entities = set()  # 收集所有提示图中的实体
+            prompt_success_count = 0
+            prompt_fail_count = 0
             
             with timer(f"Prompt Enhancer (batch_size={batch_size})", logger):
-                for i in range(batch_size):
-                    query_rel = query_rels[i]
-                    query_entity = query_entities[i]
-                    base_repr = r[i, query_rel, :]  # 使用原始表示r，而不是enhanced_relation_representations
+                try:
+                    # 批量处理：一次性为整个batch找到查询关系的边
+                    selected_edges_list, selected_edge_types_list = self.prompt_enhancer.generate_prompt_graph_batch(
+                        data, query_rels, query_entities
+                    )
                     
-                    # 获取提示图增强增量（传入关系嵌入、entity_model和relation_representations以使用方案2）
-                    try:
-                        with timer(f"Prompt Enhancer batch {i}", logger, min_time_ms=50):
-                            # 先生成提示图以获取实体列表
-                            prompt_graph, prompt_entities_list = self.prompt_enhancer.generate_prompt_graph(
+                    # 批量编码提示图上下文
+                    # 注意：每个batch使用自己的关系嵌入r[i]，但encode_prompt_context_batch需要整个关系嵌入矩阵
+                    # 这里我们传递r[0]作为参考（实际上每个样本会使用自己的query_rel对应的嵌入）
+                    prompt_contexts = self.prompt_enhancer.encode_prompt_context_batch(
+                        selected_edges_list, selected_edge_types_list, query_rels, r, query_entities, data
+                    )  # [batch_size, embedding_dim]
+                    
+                    # 批量计算增强增量
+                    for i in range(batch_size):
+                        query_rel = query_rels[i]
+                        base_repr = r[i, query_rel, :]  # [embedding_dim]
+                        prompt_context = prompt_contexts[i]  # [embedding_dim]
+                        
+                        if selected_edges_list[i] is not None:
+                            # 计算增强增量（与r1_delta保持一致，都是增量形式）
+                            fusion_input = torch.cat([base_repr, prompt_context], dim=-1)  # [2*embedding_dim]
+                            enhanced_embedding = self.prompt_enhancer.context_fusion(fusion_input)  # [embedding_dim]
+                            # 统一为增量形式：enhanced_embedding - base_repr
+                            prompt_delta = enhanced_embedding - base_repr
+                            r2_delta[i, query_rel, :] = prompt_delta
+                            prompt_success_count += 1
+                            logger.debug(f"    batch {i}: 选中边数={selected_edges_list[i].shape[1]}")
+                        else:
+                            prompt_delta = torch.zeros_like(base_repr)
+                            r2_delta[i, query_rel, :] = prompt_delta
+                            prompt_fail_count += 1
+                            logger.debug(f"    batch {i}: 未找到查询关系的边")
+                            
+                except Exception as e:
+                    logger.warning(f"[EnhancedUltra] prompt_enhancer批量处理失败，回退到逐个处理: {e}")
+                    # 回退到逐个处理
+                    for i in range(batch_size):
+                        query_rel = query_rels[i]
+                        query_entity = query_entities[i]
+                        base_repr = r[i, query_rel, :]
+                        try:
+                            selected_edges, selected_edge_types = self.prompt_enhancer.generate_prompt_graph(
                                 data, query_rel, query_entity
                             )
-                            
-                            # 收集提示图中的实体（用于实体增强）
-                            if prompt_entities_list is not None and len(prompt_entities_list) > 0:
-                                all_prompt_entities.update(prompt_entities_list)
-                            
-                            # 编码提示图上下文并获取增强增量
-                            # 传递entity_model和relation_representations以启用更好的节点初始化
-                            if prompt_graph is not None:
-                                # 确保relation_representations是有效的Tensor
-                                # r[i]是[num_relations, embedding_dim]，这是正确的格式
-                                relation_repr_for_nbfnet = r[i] if r[i] is not None and isinstance(r[i], torch.Tensor) else None
-                                
+                            if selected_edges is not None:
                                 prompt_context = self.prompt_enhancer.encode_prompt_context(
-                                    prompt_graph, query_rel, r[i], prompt_entities_list, data,
-                                    entity_model=self.entity_model if hasattr(self, 'entity_model') else None,
-                                    relation_representations=relation_repr_for_nbfnet  # 传递当前batch的关系表示
+                                    selected_edges, selected_edge_types, query_rel, r[i], query_entity, data
                                 )
-                                
-                                # 计算增强增量
-                                weight_input = torch.cat([base_repr, prompt_context], dim=-1)
-                                adaptive_weight = self.prompt_enhancer.adaptive_weights(weight_input)
                                 fusion_input = torch.cat([base_repr, prompt_context], dim=-1)
                                 enhanced_embedding = self.prompt_enhancer.context_fusion(fusion_input)
-                                prompt_delta = enhanced_embedding  # 返回增强增量
+                                prompt_delta = enhanced_embedding - base_repr
+                                r2_delta[i, query_rel, :] = prompt_delta
+                                prompt_success_count += 1
                             else:
-                                prompt_delta = torch.zeros_like(base_repr)
-                        
-                        r2_delta[i, query_rel, :] = prompt_delta
-                    except Exception as e:
-                        logger.warning(f"[EnhancedUltra] prompt_enhancer在batch {i}失败: {e}")
-                        # 失败时使用零增量，避免CUDA错误传播
-                        try:
+                                r2_delta[i, query_rel, :] = torch.zeros_like(base_repr)
+                                prompt_fail_count += 1
+                        except Exception as e2:
+                            prompt_fail_count += 1
+                            logger.warning(f"[EnhancedUltra] prompt_enhancer在batch {i}失败: {e2}")
                             r2_delta[i, query_rel, :] = torch.zeros_like(base_repr)
-                        except RuntimeError as cuda_err:
-                            # 如果CUDA错误，尝试在CPU上创建然后移到GPU
-                            logger.error(f"[EnhancedUltra] CUDA错误，尝试在CPU上创建零向量: {cuda_err}")
-                            cpu_zero = torch.zeros_like(base_repr.cpu())
-                            r2_delta[i, query_rel, :] = cpu_zero.to(base_repr.device)
             
-            logger.debug(f"[EnhancedUltra] prompt_enhancer完成，r2_delta形状={r2_delta.shape}，收集到{len(all_prompt_entities)}个提示图实体")
-            
-            # 内存优化：Prompt Enhancer处理完后，如果内存紧张，清理部分缓存
-            if torch.cuda.is_available():
-                memory_reserved = torch.cuda.memory_reserved() / 1024**3  # GB
-                memory_free = (torch.cuda.get_device_properties(0).total_memory / 1024**3) - memory_reserved
-                if memory_free < 2.0 and hasattr(self, 'prompt_enhancer') and self.prompt_enhancer is not None:
-                    # 保留最新的5个缓存项，清理其他
-                    cache_size = len(self.prompt_enhancer._bfnet_cache)
-                    if cache_size > 5:
-                        # 只保留最后5个（转换为list后取最后5个）
-                        cache_items = list(self.prompt_enhancer._bfnet_cache.items())
-                        self.prompt_enhancer._bfnet_cache.clear()
-                        self.prompt_enhancer._bfnet_cache.update(cache_items[-5:])
-                        torch.cuda.empty_cache()
-                        logger.debug(f"[EnhancedUltra] Prompt Enhancer处理完成，清理缓存 (保留最新5项，清理前: {cache_size}项)")
+            r2_delta_norm = torch.norm(r2_delta, dim=-1).mean().item()
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 提示图增强完成，r2_delta形状={r2_delta.shape}，平均L2范数={r2_delta_norm:.4f}，成功={prompt_success_count}/{batch_size}")
         else:
             r2_delta = torch.zeros_like(r)
+            logger.debug("  - 提示图增强器未启用，使用零增量")
         
-        # 并行融合：使用可学习权重（方案3 - 增量融合方式）
-        if self.use_learnable_fusion and self.fusion_weights_logits is not None:
-            # 使用softmax归一化可学习权重（只归一化两个增强器的权重）
-            enhancement_weights = F.softmax(self.fusion_weights_logits, dim=0)  # [2]
-            # enhancement_weights[0]: similarity_enhancer的权重
-            # enhancement_weights[1]: prompt_enhancer的权重
+        # 并行融合：使用可学习权重（2权重归一化方案）
+        if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+            logger.info(f"[EnhancedUltra] 步骤3/4: 融合增强表示")
+        if self.use_learnable_fusion and self.fusion_main_weights_logits is not None:
+            # 使用softmax归一化主权重（2个权重归一化）
+            main_weights = F.softmax(self.fusion_main_weights_logits, dim=0)  # [2]
+            # main_weights[0]: 原始r的权重 (w_base)
+            # main_weights[1]: 增强的权重 (w_enhance)
             
-            # 增量融合：r + w[0]*r1_delta + w[1]*r2_delta
-            # 原始r直接保留，只加权增强增量
+            # 增强器内部权重分配（用于分配r1_delta和r2_delta的权重）
+            enhance_weights = F.softmax(self.fusion_enhance_weights_logits, dim=0)  # [2]
+            # enhance_weights[0]: similarity增强的权重 (w_sim)
+            # enhance_weights[1]: prompt增强的权重 (w_prompt)
+            
+            # 定期打印融合权重（每100个batch打印一次，避免日志过多）
+            if not hasattr(self, '_fusion_log_counter'):
+                self._fusion_log_counter = 0
+            self._fusion_log_counter += 1
+            if self._fusion_log_counter % 100 == 0 or self._fusion_log_counter == 1:
+                logger.info(f"  - 融合权重 (可学习): base={main_weights[0]:.3f}, enhance={main_weights[1]:.3f}, "
+                           f"sim={enhance_weights[0]:.3f}, prompt={enhance_weights[1]:.3f}")
+            
+            # 2权重融合公式：enhanced = w_base*r + w_enhance*(r + w_sim*r1_delta + w_prompt*r2_delta)
+            # 展开后：enhanced = (w_base + w_enhance)*r + w_enhance*(w_sim*r1_delta + w_prompt*r2_delta)
+            # 因为权重归一化，w_base + w_enhance = 1，所以等价于：
+            # enhanced = r + w_enhance*(w_sim*r1_delta + w_prompt*r2_delta)
+            # 这样设计更清晰，避免了3权重方案中的冗余问题
+            
+            # 计算增强增量（加权组合两个增强器的增量）
+            combined_delta = enhance_weights[0] * r1_delta + enhance_weights[1] * r2_delta
+            
+            # 使用置信度机制评估增强增量的可靠性
+            if self.use_enhancement_confidence and self.enhancement_confidence is not None:
+                # 计算置信度：基于r和combined_delta的相似性
+                # 对于每个关系，计算置信度
+                confidence_input = torch.cat([r, combined_delta], dim=-1)  # [batch, num_rels, 2*dim]
+                confidence = self.enhancement_confidence(confidence_input)  # [batch, num_rels, 1]
+                confidence = confidence.squeeze(-1)  # [batch, num_rels]
+                
+                # 打印置信度统计信息
+                avg_confidence = confidence.mean().item()
+                min_confidence = confidence.min().item()
+                max_confidence = confidence.max().item()
+                if self._fusion_log_counter % 100 == 0 or self._fusion_log_counter == 1:
+                    logger.info(f"  - 增强置信度: 平均={avg_confidence:.3f}, 最小={min_confidence:.3f}, 最大={max_confidence:.3f}")
+                
+                # 应用置信度：低置信度时减少增强的影响
+                combined_delta = combined_delta * confidence.unsqueeze(-1)  # [batch, num_rels, dim]
+            
             if self.use_adaptive_gate and self.enhancement_gate is not None and self.use_similarity_enhancer:
                 # 使用自适应门控机制：计算门控权重
                 gate_weights = self.enhancement_gate(
@@ -1973,22 +1922,38 @@ class EnhancedUltra(nn.Module):
                 )  # [batch_size]
                 gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
                 
-                # 增量融合 + 自适应门控：r + gate*w[0]*r1_delta + w[1]*r2_delta
+                # 2权重融合 + 自适应门控：w_base*r + gate*w_enhance*(r + combined_delta)
+                # 注意：门控只影响增强部分，不影响原始表示
                 self.enhanced_relation_representations = (
-                    r + 
-                    gate_weights_expanded * enhancement_weights[0] * r1_delta + 
-                    enhancement_weights[1] * r2_delta
+                    main_weights[0] * r + 
+                    gate_weights_expanded * main_weights[1] * (r + combined_delta)
                 )
             else:
-                # 增量融合：r + w[0]*r1_delta + w[1]*r2_delta
+                # 2权重融合：w_base*r + w_enhance*(r + combined_delta)
                 self.enhanced_relation_representations = (
-                    r + 
-                    enhancement_weights[0] * r1_delta + 
-                    enhancement_weights[1] * r2_delta
+                    main_weights[0] * r + 
+                    main_weights[1] * (r + combined_delta)
                 )
+            
+            # 计算增强前后的差异统计
+            diff = torch.abs(self.enhanced_relation_representations - r).mean().item()
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 融合完成，增强前后平均差异={diff:.4f}")
         else:
             # 固定权重融合（回退到方案1）：r + u*r1 + θ*r2
             # 其中 u = similarity_enhancer_weight, θ = prompt_enhancer_weight
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 使用固定权重融合: sim_weight={self.similarity_enhancer_weight:.3f}, prompt_weight={self.prompt_enhancer_weight:.3f}")
+            
+            # 使用置信度机制评估增强增量的可靠性
+            combined_delta_fixed = self.similarity_enhancer_weight * r1_delta + self.prompt_enhancer_weight * r2_delta
+            if self.use_enhancement_confidence and self.enhancement_confidence is not None:
+                confidence_input = torch.cat([r, combined_delta_fixed], dim=-1)  # [batch, num_rels, 2*dim]
+                confidence = self.enhancement_confidence(confidence_input).squeeze(-1)  # [batch, num_rels]
+                avg_confidence = confidence.mean().item()
+                logger.info(f"  - 增强置信度: 平均={avg_confidence:.3f}")
+                combined_delta_fixed = combined_delta_fixed * confidence.unsqueeze(-1)  # [batch, num_rels, dim]
+            
             if self.use_adaptive_gate and self.enhancement_gate is not None and self.use_similarity_enhancer:
                 # 使用自适应门控机制：计算门控权重
                 gate_weights = self.enhancement_gate(
@@ -1999,22 +1964,21 @@ class EnhancedUltra(nn.Module):
                 )  # [batch_size]
                 gate_weights_expanded = gate_weights.view(batch_size, 1, 1)
                 
-                # 并行融合：r + gate_weight * u * r1 + θ * r2
+                # 并行融合：r + gate_weight * combined_delta（已应用置信度）
                 self.enhanced_relation_representations = (
                     r + 
-                    gate_weights_expanded * self.similarity_enhancer_weight * r1_delta + 
-                    self.prompt_enhancer_weight * r2_delta
+                    gate_weights_expanded * combined_delta_fixed
                 )
             else:
-                # 不使用门控机制：直接并行融合 r + u*r1 + θ*r2
+                # 不使用门控机制：直接并行融合 r + combined_delta（已应用置信度）
                 self.enhanced_relation_representations = (
                     r + 
-                    self.similarity_enhancer_weight * r1_delta + 
-                    self.prompt_enhancer_weight * r2_delta
+                    combined_delta_fixed
                 )
         
         # 使用最终的关系表示进行实体推理
-        logger.debug(f"[EnhancedUltra] 开始实体推理，enhanced_relation_representations形状={self.enhanced_relation_representations.shape}")
+        if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+            logger.info(f"[EnhancedUltra] 步骤4/4: 实体推理，enhanced_relation_representations形状={self.enhanced_relation_representations.shape}")
         
         if torch.cuda.is_available():
             memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
@@ -2022,27 +1986,17 @@ class EnhancedUltra(nn.Module):
             memory_free = (torch.cuda.get_device_properties(0).total_memory / 1024**3) - memory_reserved
             logger.debug(f"[EnhancedUltra] 实体推理前GPU内存: 已分配={memory_allocated:.2f}GB, 已保留={memory_reserved:.2f}GB, 空闲={memory_free:.2f}GB")
             
-            # 内存优化：如果内存紧张，清理Prompt Enhancer的缓存
+            # 内存优化：如果内存紧张，清理GPU缓存
             if memory_free < 1.0:  # 如果空闲内存小于1GB
-                if hasattr(self, 'prompt_enhancer') and self.prompt_enhancer is not None:
-                    cache_size_before = len(self.prompt_enhancer._bfnet_cache)
-                    self.prompt_enhancer._bfnet_cache.clear()  # 清空缓存
-                    torch.cuda.empty_cache()  # 清理GPU缓存
-                    logger.warning(f"[EnhancedUltra] 内存紧张，清理Prompt Enhancer缓存 (清理前: {cache_size_before}项)")
+                torch.cuda.empty_cache()  # 清理GPU缓存
+                logger.warning(f"[EnhancedUltra] 内存紧张，清理GPU缓存")
         
         try:
-            # 传递提示图中的实体给实体增强器（如果已收集）
-            prompt_entities_for_entity = all_prompt_entities if all_prompt_entities is not None and len(all_prompt_entities) > 0 else None
-            if prompt_entities_for_entity is not None:
-                logger.debug(f"[EnhancedUltra] 使用提示图中的{len(prompt_entities_for_entity)}个实体进行实体增强")
-            
-            # 如果entity_model是EnhancedEntityNBFNet，传递prompt_entities
-            if hasattr(self.entity_model, 'forward') and prompt_entities_for_entity is not None:
-                score = self.entity_model(data, self.enhanced_relation_representations, batch, 
-                                         prompt_entities=prompt_entities_for_entity)
-            else:
+            # 使用原始entity_model进行实体推理（不传递实体增强相关参数）
+            with timer("Entity Model", logger):
                 score = self.entity_model(data, self.enhanced_relation_representations, batch)
-            logger.debug(f"[EnhancedUltra] 实体推理完成，score形状={score.shape}")
+            if self._forward_log_counter % 50 == 0 or self._forward_log_counter == 1:
+                logger.info(f"  - 实体推理完成，score形状={score.shape}")
         except RuntimeError as e:
             if "out of memory" in str(e):
                 logger.error(f"[EnhancedUltra] GPU内存不足: {e}")
@@ -2055,6 +2009,8 @@ class EnhancedUltra(nn.Module):
         if torch.cuda.is_available():
             memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
             logger.debug(f"[EnhancedUltra] Forward完成，GPU内存: {memory_allocated:.2f}GB")
+        else:
+            logger.info(f"[EnhancedUltra] 前向传播完成")
     
         return score
     
